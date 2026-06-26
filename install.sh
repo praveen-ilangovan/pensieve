@@ -7,7 +7,7 @@
 # What it does (idempotent — safe to re-run anytime to pick up changes):
 #   1. checks all prerequisites up front (changes NOTHING if any are missing)
 #   2. ensures pipx
-#   3. pipx-installs Pensieve (editable -> your code changes are picked up)
+#   3. pipx-installs Pensieve (editable -> code changes live; re-syncs deps on re-run)
 #   4. installs the Claude skill to ~/.claude/skills/pensieve/
 #   5. registers the MCP server (user scope) -> available in every Claude session
 #
@@ -99,7 +99,17 @@ cur=""
 [ -x "$VENVS/pensieve/bin/python" ] && \
   cur="$("$VENVS/pensieve/bin/python" -c 'import sys; print("%d.%d" % sys.version_info[:2])' 2>/dev/null || true)"
 if [ "$cur" = "$want" ]; then
-  ok "already installed on Python $cur (editable — code changes are already live)"
+  # Editable: code changes are already live. But pyproject may have ADDED dependencies
+  # since this venv was built (e.g. alembic) — re-sync them in place (no recreate needed).
+  if out="$(pipx runpip pensieve install -q -e "$REPO_DIR" 2>&1)"; then
+    ok "already installed on Python $cur (editable) — dependencies re-synced"
+  else
+    warn "dependency re-sync failed; recreating the venv"
+    if ! out="$(pipx install --force --python "$PY" --editable "$REPO_DIR" 2>&1)"; then
+      err "pipx install failed:"; echo "$out"; exit 1
+    fi
+    ok "pensieve recreated on Python $want -> $PIPX_BIN"
+  fi
 else
   [ -n "$cur" ] && { pipx uninstall pensieve >/dev/null 2>&1 || true; }  # recreate on the right Python
   if ! out="$(pipx install --python "$PY" --editable "$REPO_DIR" 2>&1)"; then

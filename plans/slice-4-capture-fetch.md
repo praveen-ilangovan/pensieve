@@ -220,12 +220,12 @@ by reading in a fresh service call. Keep ruff + mypy clean; all green before com
 5. Deterministic evaluator — scripts the §1 scenario through the engine on a throwaway DB.
 6. Skill capture/fetch pass.
 7. Live verify the §1 demo across two sessions (dev store + global), then commit/push.
-   - **Fix `install.sh` dependency drift** (found in chunk 4): the editable reinstall
-     short-circuits when the Python version matches, so **new deps (e.g. `alembic`) are
-     not pulled into the existing global pipx venv** — bare `pensieve` then fails with
-     `ModuleNotFoundError`. Fix: re-resolve deps when `pyproject`/lock changed, or
-     `pipx install --force` (or `pipx inject`). Until fixed, repair a stale global with
-     `pipx reinstall pensieve`. Local dev is unaffected (`poetry run pensieve`).
+   - ✅ **`install.sh` dependency drift fixed** (found in chunk 4): when the venv already
+     exists on the right Python, the script now **re-syncs deps in place**
+     (`pipx runpip pensieve install -q -e .`) instead of skipping — so new deps (e.g.
+     `alembic`) are picked up without recreating the venv (keeps the no-recreate
+     optimization; falls back to `--force` recreate if the re-sync fails). Syntax-checked;
+     full exercise happens on the chunk-7 reinstall.
 
 ---
 
