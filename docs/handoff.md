@@ -17,7 +17,24 @@
 
 The model + verb layer are **validated cold** (4 vertical-slice runs).
 
-**We are at the design→build boundary. Building is the active next step.**
+## Build progress (engine — Python + SQLite, mirrors recs-app conventions)
+
+Stack: poetry (PEP 621) · pyenv **3.12.12** · SQLModel · pydantic-settings · typer ·
+ruff + mypy + pre-commit · pytest (`tests/unittests` + `tests/integrations`). Two
+local stores: **`.local/manual`** (dev, via `.env`) + **`.local/integration`** (tests).
+Dev flow: `poetry run pensieve …` (reads `.env`) or `make manual/quick-run/mcp`.
+
+- ✅ **Slice 1 — CLI** (`init` / `create --stream` / `ls`): CLI → `services.streams` →
+  SQLModel/SQLite. Full graph schema (`nodes/edges/todos/notes/history/counters`).
+- ✅ **Slice 2 — MCP** (`create_stream` / `list_streams`): `pensieve/mcp_server.py`
+  (FastMCP) reusing the same services. `.mcp.json` wires it into Claude Code.
+  **Live-verified: an agent created a stream via the MCP tool** (→ `.local/manual`).
+- Tests green (6), ruff/mypy clean, all pushed to `github.com:praveen-ilangovan/pensieve`.
+
+**Next: Slice 3** — more ops, same vertical-slice discipline (CLI + MCP + tests each):
+e.g. `show`/`fetch` a stream (thin view), `add-note` / `add-todo`, then expose the
+read URIs (`spec_resource_uris.md`) as MCP **resources**. Fold R1–R9 + capture model
+into `PLAYBOOK.md` as the agent side matures.
 
 ## Locked this session — the graph model (full detail in `glossary.md`)
 
