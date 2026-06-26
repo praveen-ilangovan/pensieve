@@ -34,9 +34,13 @@ Your memory lives in `~/.pensieve`. You can also use it as a CLI: `pensieve ls`,
 `pensieve create --stream "Travel" --purpose "…"`.
 
 ### Develop on it
-`make install` (poetry env + hooks) · `make test` · `make check` · `make manual ARGS="ls"`
-(local dev store via `.env` → `.local/manual`). Re-run `./install.sh` to update your
-installed copy (editable, so code changes are picked up).
+`make install` (poetry env + hooks) · `make test` · `make check` · `make manual ARGS="ls"`.
+
+This repo is a **dev environment** — nothing global. The project MCP server
+(`.mcp.json`, `poetry run`) and the CLI both use the **local dev store**
+(`.env` → `.local/manual`), so testing never touches your real memory. The **global**
+install (`./install.sh`) is separate and points at `~/.pensieve`; to try the installed
+experience, run it and launch Claude Code from **another directory**.
 
 ## What it is, in one breath
 A small **property graph** — nodes (`subject` / `person` / `org` / `place` / `event`

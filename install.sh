@@ -119,10 +119,14 @@ ok "skill -> $SKILL_DIR/SKILL.md"
 # 5. Register the MCP server (user scope)
 # ---------------------------------------------------------------------------
 bold "Registering the Pensieve MCP server (user scope)"
+# No pinned store — the server is cwd-aware: it reads PENSIEVE_HOME from the .env of
+# wherever Claude Code is launched, else defaults to ~/.pensieve. So launching in this
+# repo uses the dev store (.local/manual, via .env) for testing; anywhere else uses
+# your real ~/.pensieve.
 if [ "$HAVE_CLAUDE" -eq 1 ]; then
   claude mcp remove pensieve --scope user >/dev/null 2>&1 || true
   if claude mcp add pensieve --scope user -- "$PIPX_BIN/pensieve-mcp" >/dev/null 2>&1; then
-    ok "registered 'pensieve' -> $PIPX_BIN/pensieve-mcp  (store: ~/.pensieve)"
+    ok "registered 'pensieve' -> $PIPX_BIN/pensieve-mcp  (store: ~/.pensieve; repo .env when launched in-repo)"
   else
     err "Failed to register. Run manually:"
     err "  claude mcp add pensieve --scope user -- $PIPX_BIN/pensieve-mcp"; exit 1

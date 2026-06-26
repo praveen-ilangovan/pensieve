@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "pensieve-dev": {
+    "pensieve": {
       "command": "poetry",
       "args": ["run", "pensieve-mcp"]
     }
