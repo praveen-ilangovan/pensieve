@@ -320,6 +320,15 @@ by reading in a fresh service call. Keep ruff + mypy clean; all green before com
   it" captured automatically. Keep it to these 1–2 fields now; the commit is the stable
   home as it gets richer later (agent version, model, confidence…). Note ids stay
   **per-node** (commit ids global) — confirmed intentional.
+- **Chunk 5 — deterministic evaluator** — ✅ done. `evals/capture_fetch.py` (+ `make eval`):
+  spins up a throwaway store and drives the engine through the §1 scenario — empty →
+  create streams → list → the three capture *outcomes* (new / existing / explicit stream)
+  → fetch round-trip via a fresh service → missing-stream raises. Prints ✓/✗ per check,
+  exits non-zero on failure (regression gate). Honest scoping in the docstring: it proves
+  the engine **supports** each path (scripted-agent target choice); the agent-in-the-loop
+  eval (does the agent **choose** right, vs live MCP) is the staged follow-on. Guarded
+  from bit-rot by `tests/integrations/test_eval.py` (subprocess, asserts clean exit).
+  **9/9 checks pass; suite 33 green.**
 - **Test taxonomy — aligned to recs-app** — ✅ done. Split into per-layer conftests (no
   root conftest, like recs-app): `unittests/conftest.py` (a `services` fixture on the
   **in-memory adapter** — no DB) and `integrations/conftest.py` (`integration_store` +

@@ -43,6 +43,12 @@ migration: ## Autogenerate a migration: make migration m="add X" (review the res
 	@poetry run alembic revision --autogenerate -m "$(m)"
 
 ##################
+###### EVAL ######
+.PHONY: eval
+eval: ## Run the deterministic capture/fetch evaluator (throwaway store)
+	@poetry run python -m evals.capture_fetch
+
+##################
 ######  CLI  #####
 # Store location comes from .env (PENSIEVE_HOME=.local/manual), so these are just
 # thin wrappers — `poetry run pensieve ...` works directly in the repo too.
