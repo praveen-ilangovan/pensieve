@@ -21,6 +21,35 @@ approval). *(The slice agents output a declarative graph because it was easier t
 eyeball; that maps 1:1 to the ops below — each node = a `create_node` + its contents
 as `add_*` ops.)*
 
+### 0a. Flows vs ops (don't conflate the two layers)
+
+Pensieve has **two vocabularies, at two layers, performed by two actors** — keep them
+distinct in code and naming:
+
+| | **Flows** — `capture` / `fetch` | **Ops** — `add_note`, `get_stream`, `create_node`, … |
+| --- | --- | --- |
+| Actor | the **brain** (agent) | the **engine** |
+| Input | a raw human utterance | already-structured arguments |
+| Work | digest · filter · route · classify · resolve dates · **propose → approve** | allocate ids · write atomically · bump version |
+| Nature | judgment, fallible | deterministic, dumb, testable |
+| Output | a **diff** (a set of ops) | a committed change |
+
+`capture` is *understand + structure + decide where*; `add_note` is *commit the
+structured thing*. **A flow produces ops; an op is not a flow.** The interface between
+them is the diff (§0 above).
+
+**Consequences for the build:**
+- **Flows live only in the brain** (the Claude `SKILL.md` / playbook). `capture`/`fetch`
+  are **never** a CLI command or an MCP tool — there is no agent inside the engine to do
+  the judgment.
+- **Ops are the engine surface** — service methods, repository, MCP tools, and CLI
+  commands. The CLI says **`add`** / **`show`** (a human who typed `--stream recs` has
+  already done the "capture" in their head; the command just commits the op). The MCP
+  tool is **`add_note`** (naming it `add_note`, not `capture`, reminds the agent it must
+  still do the routing/approval *around* the call).
+- **Never name an op `capture`.** The litmus test: if it needs judgment, it's a flow; if
+  it's mechanical, it's an op.
+
 ---
 
 ## 1. The diff envelope
@@ -101,14 +130,15 @@ because it shapes which ops get emitted.
   **commitments / decisions / goals → keep**; pure **how-to the assistant delivered
   → drop**; an **un-acted-on recommendation → borderline → put in `questions`**,
   don't silently decide.
-- **R4 — Node-promotion heuristic** (the *stubbornest* borderline — apply
-  explicitly): a person/topic that **recurs with its own status/activity** → a node;
-  a **single mention → a note** (or nothing). When a noted thing **gains its own
-  todos/notes/edges or a status that changes**, that is the promotion trigger — use
-  `promote_entry`. *(Two runs left Travis a note even after he became the first
-  launched curator, while the equally-active Rafia was a node — the agent under-fires
-  R4.)* **When promotion is plausible-but-unsure, surface it as a `question`** (R9)
-  rather than silently leaving it a note.
+- **R4 — Node-promotion heuristic** (the *stubbornest* borderline — now **mechanized;
+  see §3b**): promotion is **counter-driven, not a re-read**. Each capture bumps a
+  **per-candidate counter** (the topic *and* each person it references); **recurrence
+  across captures** is the promote trigger; a **single mention → a note**, and a
+  **lone status event → *watch*, not promote** (count = 1 doesn't earn a node, or every
+  scheduling note explodes into one). When a candidate crosses the threshold, **surface
+  it as a `question`** (R9) and `promote_entry` on approval — never auto-create.
+  *(Two runs left Travis a note even after he launched, while equally-active Rafia was a
+  node — the agent under-fires R4; the counter removes the guesswork.)*
 - **R5 — Lazy nodes.** Prefer a property or note over a node until it earns one. *(A
   one-off place = a `location` property, not a `place` node — Run 1 did this right.)*
 - **R6 — Temporal placement.** Past events → `status: past`/closed; future → upcoming
@@ -119,6 +149,47 @@ because it shapes which ops get emitted.
 - **R9 — Surface, don't guess.** Genuinely ambiguous routing or keep/drop → a
   `question`, not a silent decision. The approval gate + `dropped`/`questions` are
   the safety net that lets the filter be aggressive.
+
+---
+
+## 3b. The promotion mechanic (note → node), counter-driven
+
+R4's *when* must **not** require re-reading a whole stream on every capture — that's
+O(stream) cognitive load and scales badly as a stream grows. Decompose it into three
+cheap parts:
+
+1. **Detect — mechanical, not a scan.** A counter is kept **per candidate entity** —
+   each topic *and* each person a capture references, **not** "the one subject of the
+   note." *(If it tracked only the subject, individual people would never accumulate and
+   never promote — that's the bug to avoid.)* Each capture, the agent names the entities
+   in *that slice only* (local, tiny — incremental capture); the **engine** keeps a small
+   **per-entity reference tally** and bumps it (its own count — *not* the id-allocation
+   `counters` table, which mints note/todo/commit ids). The compare is free; the agent
+   never looks back over history.
+2. **Trigger = recurrence.** A candidate becomes *promotable* when its counter crosses a
+   threshold across **distinct captures**. A **lone status/activity event** (count = 1,
+   even a dated one) is **"watch," not promote** — otherwise every person with a single
+   scheduling note becomes a node (node explosion). The watched candidate promotes when
+   it **next recurs**.
+3. **Decide — scoped + gated.** Only *flagged* candidates get considered, over **just
+   that candidate's entries** (engine returns them by key — never the whole stream).
+   Surface at the approval gate (R9): *"Rafia now appears across 2 captures with her own
+   status — give her a node?"* — user approves → `promote_entry`.
+
+**The topic usually promotes first.** A grouping like `curator-outreach` is bumped by
+*every* curator capture, so it earns a `subject` node before any individual; people then
+nest **under** it as each earns its own. This is how Run 3's emergent structure arises —
+lazily, not declared up front.
+
+**Worked example** — *"talking to 4 curators (Rafia, Travis, Violet, Raja); Rafia
+postponed her call, now Tuesday."* One capture →
+- counters: `curator-outreach +1`, `Rafia +1`, `Travis +1`, `Violet +1`, `Raja +1`
+  (all = 1).
+- writes: a note listing the four; a note *"Rafia postponed call → Tue 2026-06-30"*
+  (relative date **pinned** at capture, per R6).
+- promotions: **none** — all first-mention. Rafia is flagged **watch** (own status
+  event), not promoted; she promotes next session when her call actually happens
+  (count → 2).
 
 ---
 

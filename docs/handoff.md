@@ -27,14 +27,40 @@ Dev flow: `poetry run pensieve …` (reads `.env`) or `make manual/quick-run/mcp
 - ✅ **Slice 1 — CLI** (`init` / `create --stream` / `ls`): CLI → `services.streams` →
   SQLModel/SQLite. Full graph schema (`nodes/edges/todos/notes/history/counters`).
 - ✅ **Slice 2 — MCP** (`create_stream` / `list_streams`): `pensieve/mcp_server.py`
-  (FastMCP) reusing the same services. `.mcp.json` wires it into Claude Code.
-  **Live-verified: an agent created a stream via the MCP tool** (→ `.local/manual`).
-- Tests green (6), ruff/mypy clean, all pushed to `github.com:praveen-ilangovan/pensieve`.
+  (FastMCP) reusing the same services. **Live-verified: an agent created a stream via
+  the MCP tool.**
+- ✅ **Slice 3 — Installable, skill-driven**: `install.sh` (clone-and-run: pipx editable
+  install + skill + user-scope MCP; defensive preflight, idempotent, pins Python 3.12),
+  `adapters/claude/SKILL.md` (the Claude skill, auto-loaded). Verified: an agent listed
+  streams via the installed tool.
+- Tests green (6), ruff/mypy clean, all pushed to `github.com:praveen-ilangovan/pensieve`
+  (HEAD ~ `f033cd1`).
 
-**Next: Slice 3** — more ops, same vertical-slice discipline (CLI + MCP + tests each):
-e.g. `show`/`fetch` a stream (thin view), `add-note` / `add-todo`, then expose the
-read URIs (`spec_resource_uris.md`) as MCP **resources**. Fold R1–R9 + capture model
-into `PLAYBOOK.md` as the agent side matures.
+### Dev vs Global — the two-store model (important)
+
+| | **Dev (this repo)** | **Global (installed)** |
+| --- | --- | --- |
+| MCP server | project `pensieve` (`.mcp.json` → `poetry run pensieve-mcp`) | user-scope `pensieve` (pipx binary) |
+| Store | `.local/manual` (via repo `.env`) | `~/.pensieve` |
+| Set up by | already present | `./install.sh` (opt-in) |
+
+- The repo is a **dev environment — nothing global lives here.** The server resolves
+  the store from `.env` (cwd-aware): in-repo → `.local/manual`; elsewhere → `~/.pensieve`.
+- The global is currently **NOT installed** (we removed the user-scope reg + pipx after
+  testing). `./install.sh` re-adds it.
+
+### Verification across a restart — ✅ PASSED (2026-06-26)
+Both legs confirmed: (1) fresh Claude Code session **in this repo** → project
+`pensieve` (→ `.local/manual`) connected; "check pensieve" lists the local streams. ✓
+(2) ran `./install.sh`, `cd`'d to a **different dir**, launched Claude → global
+`pensieve` (→ `~/.pensieve`) connected to the right global store. ✓ The cwd-aware
+store resolution works end-to-end across install boundaries.
+
+**Next: Slice 4 — the capture/fetch loop (the heart).** Content ops first
+(`add-note` / `add-todo`, `show`/`fetch` a stream's thin view), then expose the read
+URIs (`spec_resource_uris.md`) as MCP **resources** (so the agent can *fetch*), then
+the digest→diff **capture** ("pensieve this"). Fold R1–R9 + the capture model into
+`brain/PLAYBOOK.md`. Same vertical-slice discipline (CLI + MCP + tests each).
 
 ## Locked this session — the graph model (full detail in `glossary.md`)
 
