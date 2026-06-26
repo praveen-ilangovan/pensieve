@@ -329,6 +329,15 @@ by reading in a fresh service call. Keep ruff + mypy clean; all green before com
   eval (does the agent **choose** right, vs live MCP) is the staged follow-on. Guarded
   from bit-rot by `tests/integrations/test_eval.py` (subprocess, asserts clean exit).
   **9/9 checks pass; suite 33 green.**
+- **Chunk 6 — the skill (capture/fetch flows)** — ✅ done. `adapters/claude/SKILL.md`
+  extended from list/create into the full brain layer: **capture** ("add this to
+  pensieve" → filter durable state → `list_streams` → propose placement (existing / new /
+  explicit) → approve → `add_note`, pinning relative dates) and **fetch** ("what's in
+  <stream>" → `get_stream`, render tightly). Encodes the vocabulary rule (speak
+  streams/notes, never node/edge/thread; translate leaked "node"→"stream"), the
+  flows-vs-ops distinction (calling `add_note` ≠ capturing), friction discipline
+  (propose once, surface ambiguity), and notes-only-for-now with a banner that R1–R9 +
+  counter-promotion follow. *(Goes live after a reinstall — chunk 7.)*
 - **Test taxonomy — aligned to recs-app** — ✅ done. Split into per-layer conftests (no
   root conftest, like recs-app): `unittests/conftest.py` (a `services` fixture on the
   **in-memory adapter** — no DB) and `integrations/conftest.py` (`integration_store` +
