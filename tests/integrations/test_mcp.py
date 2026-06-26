@@ -7,32 +7,78 @@ full agent → MCP → services → SQLite path without needing a live agent.
 import asyncio
 import os
 import sys
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
+from mcp.types import Implementation
+
+CLIENT_NAME = "claude-code-test"
 
 
-async def _roundtrip(store: Path) -> tuple[set[str], object, str]:
+@asynccontextmanager
+async def _client(store: Path) -> AsyncIterator[ClientSession]:
     params = StdioServerParameters(
         command=sys.executable,
         args=["-m", "pensieve.mcp_server"],
         env={**os.environ, "PENSIEVE_HOME": str(store)},
     )
     async with stdio_client(params) as (read, write):
-        async with ClientSession(read, write) as session:
+        async with ClientSession(
+            read,
+            write,
+            client_info=Implementation(name=CLIENT_NAME, version="9.9"),
+        ) as session:
             await session.initialize()
-            tools = {t.name for t in (await session.list_tools()).tools}
-            created = await session.call_tool(
-                "create_stream", {"name": "Recs", "purpose": "Build Recs"}
-            )
-            listed = await session.call_tool("list_streams", {})
-            return tools, created, str(listed)
+            yield session
+
+
+async def _roundtrip(store: Path) -> tuple[set[str], object, object, str]:
+    async with _client(store) as session:
+        tools = {t.name for t in (await session.list_tools()).tools}
+        await session.call_tool("create_stream", {"name": "Recs", "purpose": "Build"})
+        added = await session.call_tool(
+            "add_note", {"stream": "recs", "text": "talking to 4 curators"}
+        )
+        fetched = await session.call_tool("get_stream", {"stream": "recs"})
+        listed = await session.call_tool("list_streams", {})
+        return tools, added, fetched, str(listed)
 
 
 def test_mcp_stdio_roundtrip(integration_store: Path):
-    tools, created, listed_str = asyncio.run(_roundtrip(integration_store))
+    tools, added, fetched, listed = asyncio.run(_roundtrip(integration_store))
 
-    assert {"create_stream", "list_streams"} <= tools
-    assert created.isError is False
-    assert "recs" in listed_str
+    assert {"create_stream", "list_streams", "add_note", "get_stream"} <= tools
+    assert added.isError is False
+    assert "recs" in listed
+    assert "talking to 4 curators" in str(fetched)
+
+
+def test_mcp_records_client_as_actor(integration_store: Path):
+    asyncio.run(_roundtrip(integration_store))
+
+    # read provenance back from the same store
+    from sqlmodel import select
+
+    from pensieve.database.models import History
+    from pensieve.database.session import get_session
+
+    with get_session() as session:
+        rows = list(session.exec(select(History)))
+
+    assert any(r.actor == CLIENT_NAME and r.interface == "mcp" for r in rows)
+
+
+async def _fetch_missing(store: Path) -> object:
+    async with _client(store) as session:
+        return await session.call_tool("get_stream", {"stream": "nope"})
+
+
+def test_mcp_missing_stream_is_friendly(integration_store: Path):
+    result = asyncio.run(_fetch_missing(integration_store))
+    text = str(result)
+    assert result.isError is True
+    assert "No stream 'nope'" in text
+    assert "node" not in text.lower()  # internal term must not leak

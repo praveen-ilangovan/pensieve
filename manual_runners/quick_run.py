@@ -23,16 +23,17 @@ def main() -> None:
     # so a stray run never touches the real ~/.pensieve.
     os.environ.setdefault("PENSIEVE_HOME", str(Path(".local/manual").resolve()))
 
-    from pensieve.database.session import init_db
-    from pensieve.services import streams
+    from pensieve.errors import StreamExists
+    from pensieve.factory import stream_service
+    from pensieve.services.streams import slugify
 
-    init_db()
+    streams = stream_service()
     for name, purpose in SAMPLES:
         try:
             node = streams.create_stream(name, purpose)
             print(f"created  {node.id}")
-        except streams.StreamExists:
-            print(f"exists   {streams.slugify(name)}")
+        except StreamExists:
+            print(f"exists   {slugify(name)}")
 
     print("\nStreams:")
     for node in streams.list_streams():

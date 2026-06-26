@@ -85,6 +85,9 @@ class History(SQLModel, table=True):
     commit_id: str = Field(primary_key=True)  # c<n>
     version: int
     session: str | None = None
+    # commit provenance (agent-agnostic): who made the change, and how.
+    actor: str | None = None  # "cli" | "claude-code" | …
+    interface: str | None = None  # "cli" | "mcp"
     date: datetime = Field(default_factory=_utcnow)
     summary: str | None = None
     changes: list[Any] = Field(default_factory=list, sa_column=Column(JSON))

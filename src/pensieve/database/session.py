@@ -13,11 +13,11 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 
 from sqlalchemy import Engine, event
-from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel import Session, create_engine
 
 from ..config import get_settings
 
-# Importing models registers them on SQLModel.metadata (needed by create_all).
+# Importing models registers them on SQLModel.metadata (used by Alembic autogenerate).
 from . import models as _models  # noqa: F401
 
 _engines: dict[str, Engine] = {}
@@ -47,15 +47,24 @@ def get_engine() -> Engine:
 
 
 def init_db() -> None:
-    """Create all tables (idempotent)."""
-    SQLModel.metadata.create_all(get_engine())
+    """Ensure the store exists and is migrated to the latest schema (idempotent).
+
+    Schema is owned by Alembic (see ``database/migrate.py``); we no longer call
+    ``create_all`` — the initial migration creates the tables on a fresh store.
+    """
+    from .migrate import upgrade_to_head  # local import avoids a circular dependency
+
+    upgrade_to_head()
 
 
 def reset_engines() -> None:
     """Dispose and clear all cached engines (used by tests for isolation)."""
+    from .migrate import reset_migration_cache
+
     for engine in _engines.values():
         engine.dispose()
     _engines.clear()
+    reset_migration_cache()
 
 
 @contextmanager

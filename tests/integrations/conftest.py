@@ -1,10 +1,9 @@
 """
-Shared pytest fixtures.
+Integration-test fixtures — the real SQLite store.
 
-- `_isolate_engines` (autouse): clears the cached SQLite engines around every test,
-  so each test binds a fresh engine to whatever `PENSIEVE_HOME` it set.
-- `integration_store`: points `PENSIEVE_HOME` at a dedicated, wiped-fresh local store
-  (`.local/integration`) for integration tests — never the real `~/.pensieve`.
+`integration_store` points `PENSIEVE_HOME` at a dedicated, wiped-fresh local store
+(`.local/integration`) — never the real `~/.pensieve`. `_isolate_engines` clears the
+cached engines around each test so every test binds a fresh engine to that store.
 """
 
 from __future__ import annotations

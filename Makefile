@@ -32,6 +32,17 @@ test: ## Run all tests
 	@poetry run pytest
 
 ##################
+## MIGRATIONS  ###
+# Schema is owned by Alembic. URL comes from .env (PENSIEVE_HOME=.local/manual).
+.PHONY: migrate
+migrate: ## Apply migrations to the local store (alembic upgrade head)
+	@poetry run alembic upgrade head
+
+.PHONY: migration
+migration: ## Autogenerate a migration: make migration m="add X" (review the result!)
+	@poetry run alembic revision --autogenerate -m "$(m)"
+
+##################
 ######  CLI  #####
 # Store location comes from .env (PENSIEVE_HOME=.local/manual), so these are just
 # thin wrappers — `poetry run pensieve ...` works directly in the repo too.
