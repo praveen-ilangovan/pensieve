@@ -97,6 +97,10 @@ the full test suite stay **green** (adapted to the new model). No new capability
 - **Keep `Edge` table** (deferred) vs drop now — leaning keep (it returns; avoids
   migration churn).
 - **`update` semantics** — full text replace (simplest) vs patch. Leaning full replace.
+- **Capture grouping (deferred nicety)** — `History`/`commit_id` are dropped; provenance
+  moves onto the note (`created`/`updated`/`actor`/`interface`). If "show everything from
+  one capture" is ever wanted, re-add it as a single `capture_id` column on the note — not
+  the old commit-log table.
 
 ## 6. Progress log
 > Updated as we build (resume anchor).
