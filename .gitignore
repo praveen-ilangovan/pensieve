@@ -25,3 +25,6 @@ htmlcov/
 *.db-wal
 *.db-shm
 .pensieve/
+
+# Local dev/test stores (manual runner + integration tests)
+.local/
