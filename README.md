@@ -7,8 +7,36 @@ resume — across sessions and across the domains you actually work in.
 > The Pensieve metaphor: deliberately extract a strand of thought and deposit it in
 > the vessel. (Formerly codenamed "Memory Stick".)
 
-**Status:** design complete and validated (four cold-agent vertical-slice runs);
-engine build starting — **Python + SQLite**.
+**Status:** engine build underway — **Python + SQLite**. Shipped: a CLI and an MCP
+server for streams (create / list), wired into Claude Code. (Design validated via four
+cold-agent vertical-slice runs.)
+
+## Install (use it in Claude Code)
+
+Assumes Python 3.12+ is on your system.
+
+```bash
+git clone git@github.com:praveen-ilangovan/pensieve.git
+cd pensieve
+./install.sh
+```
+
+`install.sh` checks prerequisites up front (and changes nothing if any are missing),
+ensures `pipx`, installs Pensieve (`pensieve` + `pensieve-mcp` on your PATH), drops the
+Claude skill into `~/.claude/skills/pensieve/`, and registers the MCP server
+user-scope. It's **idempotent** — re-run it anytime to pick up changes.
+
+Then **restart Claude Code** and, from any directory, ask:
+
+> "what streams do I have? check pensieve"
+
+Your memory lives in `~/.pensieve`. You can also use it as a CLI: `pensieve ls`,
+`pensieve create --stream "Travel" --purpose "…"`.
+
+### Develop on it
+`make install` (poetry env + hooks) · `make test` · `make check` · `make manual ARGS="ls"`
+(local dev store via `.env` → `.local/manual`). Re-run `./install.sh` to update your
+installed copy (editable, so code changes are picked up).
 
 ## What it is, in one breath
 A small **property graph** — nodes (`subject` / `person` / `org` / `place` / `event`
