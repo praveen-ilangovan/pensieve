@@ -43,6 +43,10 @@ manual: ## Run the CLI against the local store (make manual ARGS="create --strea
 quick-run: ## Seed the local store with sample streams
 	@poetry run python manual_runners/quick_run.py
 
+.PHONY: mcp
+mcp: ## Run the MCP server (stdio) — for wiring into an agent
+	@poetry run pensieve-mcp
+
 ##################
 #####  HELP  #####
 .PHONY: help
