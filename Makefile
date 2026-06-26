@@ -33,13 +33,15 @@ test: ## Run all tests
 
 ##################
 ######  CLI  #####
+# Store location comes from .env (PENSIEVE_HOME=.local/manual), so these are just
+# thin wrappers — `poetry run pensieve ...` works directly in the repo too.
 .PHONY: manual
-manual: ## Run the CLI against the local manual store (make manual ARGS="create --stream recs")
-	@PENSIEVE_HOME=$(PWD)/.local/manual poetry run pensieve $(ARGS)
+manual: ## Run the CLI against the local store (make manual ARGS="create --stream recs")
+	@poetry run pensieve $(ARGS)
 
 .PHONY: quick-run
-quick-run: ## Seed the local manual store with sample streams
-	@PENSIEVE_HOME=$(PWD)/.local/manual poetry run python manual_runners/quick_run.py
+quick-run: ## Seed the local store with sample streams
+	@poetry run python manual_runners/quick_run.py
 
 ##################
 #####  HELP  #####
