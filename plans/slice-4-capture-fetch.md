@@ -338,6 +338,21 @@ by reading in a fresh service call. Keep ruff + mypy clean; all green before com
   flows-vs-ops distinction (calling `add_note` ≠ capturing), friction discipline
   (propose once, surface ambiguity), and notes-only-for-now with a banner that R1–R9 +
   counter-promotion follow. *(Goes live after a reinstall — chunk 7.)*
+- **Chunk 7 — live verify** — ✅ PASSED → **Slice 4 COMPLETE.** Reinstalled the global
+  (the `install.sh` dep re-sync pulled in `alembic`); new skill + MCP tools loaded;
+  `~/.pensieve` auto-migrated. Verified live across **three independent sessions**:
+  capture proposed a new `recs` stream (approved → created + first note); a later session
+  captured an email thread + WhatsApp exchange into **3 flavored notes** (filter held,
+  flavors right, "next Tuesday"→`Jun 30` pinned, date conflict **surfaced not guessed**,
+  routed into existing stream); a third fresh session recalled "what about Rafia" with
+  full coherent cross-session recall. The core promise — capture in one session, fetch in
+  another — works end-to-end with `actor=claude-code` provenance.
+- **What live use surfaced → next slice.** Real data already exhibits the promotion
+  signal: **Rafia recurs** across notes (her own status/activity) — exactly §3b's trigger;
+  "what about Rafia" currently scans all of `recs` and filters, which a Rafia **node**
+  would turn into a direct lookup. Mild **note accumulation** (two notes touch the same
+  meeting/date) wants the **supersede/condense** edit layer. => **Next slice: counter-driven
+  note→node promotion + edit ops** (the data is asking for it).
 - **Test taxonomy — aligned to recs-app** — ✅ done. Split into per-layer conftests (no
   root conftest, like recs-app): `unittests/conftest.py` (a `services` fixture on the
   **in-memory adapter** — no DB) and `integrations/conftest.py` (`integration_store` +
