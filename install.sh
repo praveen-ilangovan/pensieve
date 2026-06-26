@@ -93,10 +93,20 @@ PIPX_BIN="$(pipx environment --value PIPX_BIN_DIR 2>/dev/null || echo "$HOME/.lo
 # 3. Install / update Pensieve (editable -> picks up code changes on re-run)
 # ---------------------------------------------------------------------------
 bold "Installing Pensieve (pipx, editable)"
-if ! out="$(pipx install --force --editable "$REPO_DIR" 2>&1)"; then
-  err "pipx install failed:"; echo "$out"; exit 1
+VENVS="$(pipx environment --value PIPX_LOCAL_VENVS 2>/dev/null || echo "$HOME/.local/pipx/venvs")"
+want="$("$PY" -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
+cur=""
+[ -x "$VENVS/pensieve/bin/python" ] && \
+  cur="$("$VENVS/pensieve/bin/python" -c 'import sys; print("%d.%d" % sys.version_info[:2])' 2>/dev/null || true)"
+if [ "$cur" = "$want" ]; then
+  ok "already installed on Python $cur (editable — code changes are already live)"
+else
+  [ -n "$cur" ] && { pipx uninstall pensieve >/dev/null 2>&1 || true; }  # recreate on the right Python
+  if ! out="$(pipx install --python "$PY" --editable "$REPO_DIR" 2>&1)"; then
+    err "pipx install failed:"; echo "$out"; exit 1
+  fi
+  ok "pensieve + pensieve-mcp (Python $want) -> $PIPX_BIN"
 fi
-ok "pensieve + pensieve-mcp -> $PIPX_BIN"
 
 # ---------------------------------------------------------------------------
 # 4. Install the Claude skill
