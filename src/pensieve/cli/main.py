@@ -365,8 +365,9 @@ def entity_edit(
 def entity_rm(entity: str = typer.Argument(..., help="Entity id to remove.")) -> None:
     """Remove an entity and its thread (soft — bring it back with 'entity restore').
 
-    Purges the notes about it; notes that were only about this entity (and the entities
-    riding only those notes) go too.
+    This *unlinks* the entity from its notes — it never deletes a note: a note shared with
+    another subject survives under that subject; a note left with no subject becomes a plain
+    note.
     """
     try:
         entity_service().delete_entity(entity)

@@ -1,5 +1,11 @@
 # Pensieve — Verbs (the operation layer)
 
+> ⚠️ **HISTORICAL / partly superseded.** Drafted before the engine was built; describes
+> ideas the shipped engine does **not** implement (e.g. todos, note `flavor`, `supersede`,
+> a separate history/diff log). For the current surface see **`docs/cli.md`** (CLI),
+> **`adapters/claude/SKILL.md`** (agent flows), **`docs/glossary.md`** (nouns). Kept for
+> design rationale only.
+
 > **Status:** drafted from validation · **Date:** 2026-06-27
 > **Pairs with `glossary.md`:** glossary = the **nouns** (what exists); this = the
 > **verbs** (how it changes). Together they are the model.

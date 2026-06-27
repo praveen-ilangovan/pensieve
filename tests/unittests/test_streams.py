@@ -99,6 +99,41 @@ def test_restore_stream_brings_back_stream_and_threads(services):
         services.streams.restore_stream("nope")
 
 
+def test_restore_stream_does_not_resurrect_dead_entity_thread(services):
+    # overlapping removals: entity rm a promoted entity, then stream rm + restore. The
+    # dead entity's thread must NOT come back (the architect-review blocker).
+    services.streams.create_stream("Recs")
+    services.content.add_note(
+        "recs", "met rafia", entities=[{"name": "Rafia", "kind": "person"}]
+    )
+    services.entities.promote_entity("rafia", "recs")
+    services.entities.delete_entity("rafia")  # thread dropped, rafia derives away
+    services.streams.delete_stream("recs")
+    services.streams.restore_stream("recs")
+
+    assert services.content.get_stream_view("recs")["children"] == []
+    assert services.entities.list_entities() == []
+
+
+def test_restore_entity_under_removed_stream_self_heals(services):
+    services.streams.create_stream("Recs")
+    services.content.add_note(
+        "recs", "met rafia", entities=[{"name": "Rafia", "kind": "person"}]
+    )
+    services.entities.promote_entity("rafia", "recs")
+    services.entities.delete_entity("rafia")
+    services.streams.delete_stream("recs")  # stream gone
+
+    services.entities.restore_entity("rafia")  # stream still gone → thread stays hidden
+    assert services.streams.get_stream("rafia") is None
+
+    services.streams.restore_stream("recs")  # now it all comes back
+    assert services.streams.get_stream("rafia") is not None
+    assert [c["id"] for c in services.content.get_stream_view("recs")["children"]] == [
+        "rafia"
+    ]
+
+
 def test_delete_stream_keeps_cross_stream_note_live(services):
     services.streams.create_stream("Recs")
     services.streams.create_stream("Employment")

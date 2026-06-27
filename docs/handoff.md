@@ -1,5 +1,10 @@
 # Pensieve — Handoff / Resume Point
 
+> ⚠️ **HISTORICAL.** Superseded by the active plans in **`plans/`** (see
+> `plans/roadmap.md`) and the live docs **`docs/cli.md`** + **`adapters/claude/SKILL.md`**.
+> Parts of this describe a pre-build design (todos, `flavor`, history/diff ops) that the
+> shipped engine does not implement. Kept for project history.
+
 > **Updated:** 2026-06-27 · **Pick up by reading:** this file, then `docs/glossary.md`
 > (nouns) + `docs/verbs.md` (verbs), then `docs/core_concept.md` (v0.6, narrative).
 

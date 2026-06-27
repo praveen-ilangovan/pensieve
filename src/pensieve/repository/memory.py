@@ -73,9 +73,11 @@ class InMemoryRepository:
         )
 
     # nodes ----------------------------------------------------------------
-    def get_node(self, node_id: str) -> Node | None:
+    def get_node(self, node_id: str, *, include_deleted: bool = False) -> Node | None:
         node = self._state.nodes.get(node_id)
-        return _clone(node) if node is not None and node.deleted_at is None else None
+        if node is None or (node.deleted_at is not None and not include_deleted):
+            return None
+        return _clone(node)
 
     def add_node(self, node: Node) -> None:
         self._state.nodes[node.id] = node

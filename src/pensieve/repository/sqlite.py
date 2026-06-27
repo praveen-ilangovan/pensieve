@@ -11,24 +11,33 @@ from __future__ import annotations
 
 from types import TracebackType
 
-from sqlalchemy import String, cast, func, or_
+from sqlalchemy import String, cast, func, or_, text
 from sqlmodel import Session, col, select
 
-from ..database.models import Attachment, Counter, Entity, Node, Note, Tag
+from ..database.models import Attachment, Entity, Node, Note, Tag
 from ..database.session import get_engine, init_db
 from .base import Repository
 
 
 class SqliteRepository:
-    """Storage primitives over a SQLModel `Session` (one open transaction)."""
+    """Storage primitives over a SQLModel `Session` (one open transaction).
+
+    **FK ordering rule:** models carry no ORM relationships (dumb data holders), so the
+    unit-of-work won't order an inserted link row after the rows it references. Any method
+    that inserts a row with a foreign key (``attach``, ``tag_note`` — and any future
+    link table such as assets) MUST ``self._session.flush()`` first so the FK targets
+    exist; otherwise SQLite (``foreign_keys=ON``) raises IntegrityError.
+    """
 
     def __init__(self, session: Session) -> None:
         self._session = session
 
     # nodes ----------------------------------------------------------------
-    def get_node(self, node_id: str) -> Node | None:
+    def get_node(self, node_id: str, *, include_deleted: bool = False) -> Node | None:
         node = self._session.get(Node, node_id)
-        return node if node is not None and node.deleted_at is None else None
+        if node is None or (node.deleted_at is not None and not include_deleted):
+            return None
+        return node
 
     def add_node(self, node: Node) -> None:
         self._session.add(node)
@@ -206,13 +215,18 @@ class SqliteRepository:
         return int(self._session.exec(statement).one())
 
     def next_id(self, scope: str, kind: str, prefix: str) -> str:
-        counter = self._session.get(Counter, (scope, kind))
-        if counter is None:
-            counter = Counter(scope=scope, kind=kind, next=0)
-        n = counter.next + 1
-        counter.next = n
-        self._session.add(counter)
-        return f"{prefix}{n}"
+        # Atomic allocate-and-increment in a single statement: SQLite runs the upsert under
+        # its write lock, so two concurrent writers (e.g. CLI + MCP on one store) serialize
+        # and can't hand out the same id. RETURNING gives back the new value.
+        row = self._session.execute(
+            text(
+                "INSERT INTO counters (scope, kind, next) VALUES (:scope, :kind, 1) "
+                "ON CONFLICT(scope, kind) DO UPDATE SET next = next + 1 "
+                "RETURNING next"
+            ),
+            {"scope": scope, "kind": kind},
+        ).one()
+        return f"{prefix}{row[0]}"
 
 
 class SqliteUnitOfWork:

@@ -101,12 +101,20 @@ class StreamService:
             uow.commit()
 
     def restore_stream(self, stream_id: str) -> None:
-        """Un-delete a stream and its (soft-deleted) threads; their notes relive
-        transitively and derived entities reappear. Raises ``NodeNotFound``."""
+        """Un-delete a stream and its threads; their notes relive transitively. A child
+        thread is re-shown **only if its entity is still live** (≥1 live note) — a thread
+        removed independently (via ``entity rm``) stays gone, so restoring a stream never
+        resurrects an orphan thread. Raises ``NodeNotFound``."""
         with self._uow() as uow:
             # raw lookup — get_node hides soft-deleted rows
             if not uow.repo.set_node_deleted(stream_id, None):
                 raise NodeNotFound(f"No node '{stream_id}'")
             for child in uow.repo.children_of(stream_id, include_deleted=True):
+                # a thread is alive iff its entity is (id of a promoted entity == its
+                # thread node id). Restore the stream first (above) so notes homed on it
+                # count as live here.
+                entity = uow.repo.get_entity(child.id)
+                if entity is not None and uow.repo.count_for_entity(child.id) == 0:
+                    continue  # derived-gone entity → leave its thread removed
                 uow.repo.set_node_deleted(child.id, None)
             uow.commit()

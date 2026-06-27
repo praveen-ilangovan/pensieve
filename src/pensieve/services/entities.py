@@ -192,14 +192,22 @@ class EntityService:
 
     def restore_entity(self, entity_id: str) -> None:
         """Reverse ``delete_entity``: re-link the entity to its notes and bring back its
-        thread node. Raises ``EntityNotFound``."""
+        thread node — but only re-show the thread if its **parent stream is visible** (else
+        we'd surface a thread under a removed stream; it self-heals when the stream is
+        restored). Raises ``EntityNotFound``."""
         with self._uow() as uow:
             entity = uow.repo.get_entity(entity_id)
             if entity is None:
                 raise EntityNotFound(f"No entity '{entity_id}'")
             uow.repo.set_tags_deleted_for_entity(entity_id, None)
             if entity.node_id is not None:
-                uow.repo.set_node_deleted(entity.node_id, None)
+                thread = uow.repo.get_node(entity.node_id, include_deleted=True)
+                parent_ok = thread is not None and (
+                    thread.parent_id is None
+                    or uow.repo.get_node(thread.parent_id) is not None
+                )
+                if parent_ok:
+                    uow.repo.set_node_deleted(entity.node_id, None)
             uow.commit()
 
     def _view(self, uow: UnitOfWork, entity: Entity) -> dict[str, Any]:

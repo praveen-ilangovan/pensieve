@@ -230,9 +230,67 @@ def _scenario_E(checks: Checks) -> None:
     )
 
 
+def _scenario_F(checks: Checks) -> None:
+    """OVERLAPPING removals — restore must reverse only its own delete, not blanket-revive.
+    entity rm a promoted entity, THEN stream rm, THEN stream restore: the dead entity's
+    thread must NOT come back (the architect-review blocker)."""
+    from pensieve.factory import content_service, entity_service, stream_service
+
+    _seed()
+    entity_service().promote_entity("rafia", "recs")
+    entity_service().delete_entity("rafia")  # thread dropped, rafia derives away
+    stream_service().delete_stream("recs")
+    stream_service().restore_stream("recs")  # must NOT resurrect rafia's thread
+
+    checks.eq(
+        "F: stream restore does not resurrect the dead entity's thread",
+        content_service().get_stream_view("recs")["children"],
+        [],
+    )
+    checks.eq("F: the dead entity stays gone", "rafia" in _live_entities(), False)
+    # travis (never removed, shared note) is back with the stream
+    checks.eq("F: an untouched entity returns with the stream", _count("travis"), 2)
+
+
+def _scenario_G(checks: Checks) -> None:
+    """A note removed BEFORE a stream rm stays removed after the stream is restored
+    (restore_stream never touches note flags)."""
+    from pensieve.factory import content_service, stream_service
+
+    ids = _seed()
+    content_service().delete_note(ids["n1"])  # plain note, removed independently
+    stream_service().delete_stream("recs")
+    stream_service().restore_stream("recs")
+
+    checks.eq(
+        "G: independently-removed note stays removed after stream restore",
+        ids["n1"] in _loose_ids("recs"),
+        False,
+    )
+    checks.eq(
+        "G: the stream's other notes come back",
+        {ids["n2"], ids["n3"]} <= _loose_ids("recs"),
+        True,
+    )
+    content_service().restore_note(ids["n1"])
+    checks.eq(
+        "G: explicitly restoring the note brings it back",
+        ids["n1"] in _loose_ids("recs"),
+        True,
+    )
+
+
 def run_checks() -> Checks:
     checks = Checks()
-    for scenario in (_scenario_A, _scenario_B, _scenario_C, _scenario_D, _scenario_E):
+    for scenario in (
+        _scenario_A,
+        _scenario_B,
+        _scenario_C,
+        _scenario_D,
+        _scenario_E,
+        _scenario_F,
+        _scenario_G,
+    ):
         _run_isolated(scenario, checks)
     return checks
 

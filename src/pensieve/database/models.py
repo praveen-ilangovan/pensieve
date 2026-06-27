@@ -43,7 +43,11 @@ class Node(SQLModel, table=True):
 
 
 class Edge(SQLModel, table=True):
-    """A typed relationship between two nodes (NON-`contains`)."""
+    """A typed relationship between two nodes (NON-`contains`).
+
+    RESERVED — declared & migrated but not yet read/written by any code. Kept for the
+    planned entity-to-entity edges (see plans/roadmap.md); do not assume it holds data.
+    """
 
     __tablename__ = "edges"
 
