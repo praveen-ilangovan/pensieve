@@ -161,6 +161,26 @@ def test_add_note_merges_new_aliases_into_existing_entity(services):
     assert services.entities.get_entity("rafia-naseem").aliases == ["Rafia", "her"]
 
 
+def test_untag_note_removes_tag_and_detaches_from_thread(services):
+    services.streams.create_stream("Recs")
+    n = services.content.add_note(
+        "recs", "overview that mentions Rafia", entities=[{"name": "Rafia", "kind": "person"}]
+    )
+    services.entities.promote_entity("rafia", "recs")  # n attaches to her thread
+
+    services.content.untag_note(n.id, "rafia")
+
+    with services.uow() as uow:
+        assert uow.repo.tags_for_note(n.id) == []
+        assert uow.repo.count_for_entity("rafia") == 0
+    # untagged → back in the stream's loose view; gone from the thread
+    assert n.id in {x["id"] for x in services.content.get_stream_view("recs")["notes"]}
+    assert n.id not in {x["id"] for x in services.content.get_stream_view("rafia")["notes"]}
+
+    with pytest.raises(NoteNotFound):
+        services.content.untag_note("note-99", "rafia")
+
+
 def test_tag_existing_note(services):
     services.streams.create_stream("Recs")
     note = services.content.add_note("recs", "a note")

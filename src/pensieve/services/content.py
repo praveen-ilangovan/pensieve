@@ -107,6 +107,20 @@ class ContentService:
             uow.commit()
             return ids
 
+    def untag_note(self, note_id: str, entity_id: str) -> None:
+        """Remove an entity tag from a note — for correcting a mis-tag. If the entity is
+        promoted, also detach the note from its thread (the inverse of tagging). Raises
+        ``NoteNotFound``; a tag that isn't there is a no-op.
+        """
+        with self._uow() as uow:
+            if uow.repo.get_note(note_id) is None:
+                raise NoteNotFound(f"No note '{note_id}'")
+            uow.repo.untag_note(note_id, entity_id)
+            entity = uow.repo.get_entity(entity_id)
+            if entity is not None and entity.node_id is not None:
+                uow.repo.detach(note_id, entity.node_id)
+            uow.commit()
+
     def _tag(self, uow: UnitOfWork, note_id: str, entity_id: str) -> None:
         """Tag a note with an entity; if the entity is already promoted, also attach the
         note to its thread node (so it shows under the thread immediately)."""

@@ -76,6 +76,11 @@ def test_entity_link_list_find(integration_store: Path):
 
     assert runner.invoke(app, ["entity", "link", "note-99", "X"]).exit_code == 1
 
+    # unlink (fix a mis-tag) → entity count drops to 0
+    assert runner.invoke(app, ["entity", "unlink", "note-1", "rafia-naseem"]).exit_code == 0
+    assert "×0" in runner.invoke(app, ["entity", "list"]).stdout
+    assert runner.invoke(app, ["entity", "unlink", "note-99", "rafia-naseem"]).exit_code == 1
+
 
 def test_promote_show_thread_and_recall(integration_store: Path):
     runner.invoke(app, ["stream", "create", "Recs"])

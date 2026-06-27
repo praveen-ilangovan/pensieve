@@ -33,6 +33,7 @@
 | command | what |
 | --- | --- |
 | `pensieve entity link <note> <name> [-k <kind>]` | link a note to an entity (creates it if new) — this *is* entity creation |
+| `pensieve entity unlink <note> <entity-id>` | remove an entity tag from a note (fix a mis-tag; detaches from the thread if promoted) |
 | `pensieve entity list` | the registry with counts + `★ promotable` / `✓ promoted` |
 | `pensieve entity promote <id> -s <stream>` | promote an entity into its own thread |
 | `pensieve entity edit <id> [--name] [--alias]` | rename / edit aliases — **stub (planned)** |

@@ -139,6 +139,23 @@ def delete_note(note: str) -> dict:
 
 
 @mcp.tool()
+def untag_note(note: str, entity: str) -> dict:
+    """Remove an entity tag from a note — correct a mis-tag (e.g. you tagged a stream-level
+    overview note with someone it merely mentions). If the entity is promoted, the note is
+    also detached from its thread.
+
+    Args:
+        note: Note id.
+        entity: Entity id to unlink (from `list_entities`/`get_entity`).
+    """
+    try:
+        content_service().untag_note(note, entity)
+    except NoteNotFound as exc:
+        raise ValueError(f"No note '{note}'") from exc
+    return {"note": note, "unlinked": entity}
+
+
+@mcp.tool()
 def get_entity(entity: str) -> dict:
     """Recall everything about an entity: its identity + every note that references it.
 

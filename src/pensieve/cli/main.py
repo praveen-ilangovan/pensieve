@@ -230,6 +230,23 @@ def entity_link(
     typer.echo(f"✓ linked {note} → {ids[0]}")
 
 
+@entity_app.command("unlink")
+def entity_unlink(
+    note: str = typer.Argument(..., help="Note id (e.g. note-3)."),
+    entity: str = typer.Argument(..., help="Entity id to remove (see 'entity list')."),
+) -> None:
+    """Remove an entity tag from a note (fix a mis-tag).
+
+    Example: pensieve entity unlink note-5 rafia-naseem
+    """
+    try:
+        content_service().untag_note(note, entity)
+    except NoteNotFound as exc:
+        typer.echo(f"✗ No note '{note}'", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"✓ unlinked {entity} from {note}")
+
+
 @entity_app.command("list")
 def entity_list() -> None:
     """List the entity registry with note counts."""
