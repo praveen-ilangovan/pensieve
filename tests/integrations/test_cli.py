@@ -82,6 +82,20 @@ def test_entity_link_list_find(integration_store: Path):
     assert runner.invoke(app, ["entity", "unlink", "note-99", "rafia-naseem"]).exit_code == 1
 
 
+def test_find_dedups_promoted_entity(integration_store: Path):
+    runner.invoke(app, ["stream", "create", "Recs"])
+    runner.invoke(app, ["note", "add", "met rafia", "-s", "recs"])
+    runner.invoke(app, ["entity", "link", "note-1", "Rafia Naseem", "-k", "person"])
+    runner.invoke(app, ["entity", "promote", "rafia-naseem", "-s", "recs"])
+
+    out = runner.invoke(app, ["find", "rafia"]).stdout
+    assert out.count("rafia-naseem") == 1  # once (as its thread), not thread + entity
+    assert "thread" in out
+
+    # but --type entity still surfaces it (no node search to dedup against)
+    assert "rafia-naseem" in runner.invoke(app, ["find", "rafia", "-t", "entity"]).stdout
+
+
 def test_promote_show_thread_and_recall(integration_store: Path):
     runner.invoke(app, ["stream", "create", "Recs"])
     runner.invoke(app, ["note", "add", "met rafia", "-s", "recs"])

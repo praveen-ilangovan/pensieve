@@ -138,6 +138,7 @@ def run_checks() -> Checks:
     checks.eq("promoted to a thread under the stream", node.parent_id, "recs")
     view = entity_service().get_entity_view("rafia-naseem")
     checks.eq("entity is now a thread", view["promoted"], True)
+    checks.eq("promoted entity's thread shares its id", view["node_id"], "rafia-naseem")
     checks.eq(
         "recall returns the entity's notes",
         [n["text"] for n in view["notes"]],

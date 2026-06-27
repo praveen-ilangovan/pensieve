@@ -54,4 +54,9 @@ can be untagged.)
   *mentions*"). Tests: loose-vs-covered + cross-stream (unit), updated the old additive
   promote test (storage stays, view hides), eval +2 (**18/18**). Suite **57 green**, smoke
   ✓ (`show recs` = thread summary + only the untagged overview note).
-- *Out of scope (logged):* `find` dedup; edit/rm backend; promote-to-top-level-stream.
+- **`find` dedup — ✅ done.** A promoted entity showed as both a thread (node) and an
+  entity row; `find` now skips the entity row when its id already appears as a node (still
+  surfaces it under `--type entity`, where no node search runs to dedup against). Eval +1
+  invariant (a promoted entity's `node_id` == its id — what makes the dedup necessary).
+  Suite **59 green**, eval **19/19**.
+- *Out of scope (logged):* edit/rm backend; promote-to-top-level-stream.

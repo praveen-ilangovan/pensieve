@@ -102,13 +102,17 @@ def find(
 ) -> None:
     """Fuzzy-search streams, threads, and entities."""
     rows: list[tuple[str, str, str]] = []
+    node_ids: set[str] = set()
     if node_type in (None, "stream", "thread"):
         for node in stream_service().find_nodes(query):
             pos = "stream" if node.parent_id is None else "thread"
             if node_type in (None, pos):
                 rows.append((pos, node.id, node.label))
+                node_ids.add(node.id)
     if node_type in (None, "entity"):
         for e in entity_service().find_entities(query):
+            if e["id"] in node_ids:
+                continue  # a promoted entity already shows as its thread node
             rows.append(("entity", e["id"], f"{e['name']} ×{e['count']}"))
     if not rows:
         typer.echo(f"No matches for '{query}'.")
