@@ -65,31 +65,45 @@ def test_update_missing_note_raises(services):
         services.content.update_note("note-99", "x")
 
 
-def test_delete_note_removes_it_and_its_attachment(services):
+def test_delete_note_is_soft_and_restorable(services):
     services.streams.create_stream("Recs")
     note = services.content.add_note("recs", "oops wrong note")
 
     services.content.delete_note(note.id)
-
+    # hidden from the view, but the row survives (soft) with a deletion stamp
     assert services.content.get_stream_view("recs")["notes"] == []
-    assert note.id not in services.state.notes
-    assert all(a[0] != note.id for a in services.state.attachments)
+    assert services.state.notes[note.id].deleted_at is not None
+    # a hidden note reads as absent (re-delete errors); restore brings it back
+    with pytest.raises(NoteNotFound):
+        services.content.delete_note(note.id)
+    services.content.restore_note(note.id)
+    assert [n["id"] for n in services.content.get_stream_view("recs")["notes"]] == [
+        note.id
+    ]
 
 
 def test_delete_missing_note_raises(services):
     with pytest.raises(NoteNotFound):
         services.content.delete_note("note-99")
+    with pytest.raises(NoteNotFound):
+        services.content.restore_note("note-99")
 
 
-def test_delete_tagged_note_cleans_up_tags(services):
+def test_delete_tagged_note_drops_entity_count(services):
     services.streams.create_stream("Recs")
     n = services.content.add_note(
         "recs", "x", entities=[{"name": "Rafia", "kind": "person"}]
     )
     services.content.delete_note(n.id)
     with services.uow() as uow:
-        assert uow.repo.tags_for_note(n.id) == []
+        # the tag row persists (soft), but the entity has no LIVE note → count 0
         assert uow.repo.count_for_entity("rafia") == 0
+    assert services.entities.list_entities() == []  # derived-gone
+
+    services.content.restore_note(n.id)
+    with services.uow() as uow:
+        assert uow.repo.count_for_entity("rafia") == 1
+    assert [e["id"] for e in services.entities.list_entities()] == ["rafia"]
 
 
 def test_get_stream_view_shape(services):

@@ -167,6 +167,74 @@ def run_checks() -> Checks:
         ["Rafia and Travis are curators"],
     )
 
+    # 9. SOFT-DELETE & RESTORE — rm is reversible; entities are derived from live notes.
+    from pensieve.errors import EntityNotFound
+
+    # (a) rm a loose note hides it; restore brings it back.
+    content.delete_note(d.id)  # "Rafia and Travis are curators"
+    checks.eq(
+        "rm note hides it from the stream",
+        [n["text"] for n in content_service().get_stream_view("recs")["notes"]],
+        [],
+    )
+    content.restore_note(d.id)
+    checks.eq(
+        "restore note brings it back",
+        [n["text"] for n in content_service().get_stream_view("recs")["notes"]],
+        ["Rafia and Travis are curators"],
+    )
+
+    # (b) rm a promoted entity purges its notes + thread → derived-gone; restore reverses.
+    entities.delete_entity("rafia-naseem")
+    checks.eq(
+        "rm entity drops it from the registry",
+        [e["id"] for e in entity_service().list_entities()],
+        [],
+    )
+    checks.eq(
+        "rm entity removes its thread from the stream",
+        [c["id"] for c in content_service().get_stream_view("recs")["children"]],
+        [],
+    )
+    checks.raises(
+        "recall of a removed entity raises EntityNotFound",
+        EntityNotFound,
+        lambda: entity_service().get_entity_view("rafia-naseem"),
+    )
+    entities.restore_entity("rafia-naseem")
+    checks.eq(
+        "restore entity brings back its notes (recall)",
+        [n["text"] for n in entity_service().get_entity_view("rafia-naseem")["notes"]],
+        ["Rafia emailed", "Rafia called", "Rafia confirmed"],
+    )
+
+    # (c) rm a stream: a cross-stream entity survives via its other stream; restore reverses.
+    content.add_note(
+        "writing",
+        "met Nadia at the salon",
+        entities=[{"name": "Nadia", "kind": "person"}],
+    )
+    content.add_note(
+        "employment", "Nadia is a hiring manager", entities=[{"id": "nadia"}]
+    )
+    streams.delete_stream("writing")
+    checks.eq(
+        "stream rm drops it from the list",
+        "writing" in [s.id for s in stream_service().list_streams()],
+        False,
+    )
+    checks.eq(
+        "cross-stream entity survives a stream rm (via its other home)",
+        [n["text"] for n in entity_service().get_entity_view("nadia")["notes"]],
+        ["Nadia is a hiring manager"],
+    )
+    streams.restore_stream("writing")
+    checks.eq(
+        "restore stream relives its notes",
+        [n["text"] for n in entity_service().get_entity_view("nadia")["notes"]],
+        ["met Nadia at the salon", "Nadia is a hiring manager"],
+    )
+
     # fetching a missing stream raises (engine vocabulary; CLI/MCP translate it)
     checks.raises(
         "fetch missing stream raises NodeNotFound",

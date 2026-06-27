@@ -76,9 +76,9 @@ def test_entity_link_list_find(integration_store: Path):
 
     assert runner.invoke(app, ["entity", "link", "note-99", "X"]).exit_code == 1
 
-    # unlink (fix a mis-tag) → entity count drops to 0
+    # unlink (fix a mis-tag) → entity loses its last note → vanishes (derived)
     assert runner.invoke(app, ["entity", "unlink", "note-1", "rafia-naseem"]).exit_code == 0
-    assert "×0" in runner.invoke(app, ["entity", "list"]).stdout
+    assert "rafia-naseem" not in runner.invoke(app, ["entity", "list"]).stdout
     assert runner.invoke(app, ["entity", "unlink", "note-99", "rafia-naseem"]).exit_code == 1
 
 
@@ -134,9 +134,59 @@ def test_edit_commands(integration_store: Path):
     assert runner.invoke(app, ["entity", "edit", "ghost", "--name", "x"]).exit_code == 1
 
 
-def test_unimplemented_stubs(integration_store: Path):
-    # rm is still a stub (soft-delete lands in the next chunk)
-    for cmd in (["stream", "rm", "recs"], ["entity", "rm", "rafia"]):
-        result = runner.invoke(app, cmd)
-        assert result.exit_code == 1
-        assert "not implemented yet" in result.output
+def test_note_rm_restore(integration_store: Path):
+    runner.invoke(app, ["stream", "create", "Recs"])
+    runner.invoke(app, ["note", "add", "keep me", "-s", "recs"])  # note-1
+    runner.invoke(app, ["note", "add", "drop me", "-s", "recs"])  # note-2
+
+    assert runner.invoke(app, ["note", "rm", "note-2"]).exit_code == 0
+    assert "drop me" not in runner.invoke(app, ["show", "recs"]).stdout
+    # soft — re-removing a hidden note reads as absent; restore brings it back
+    assert runner.invoke(app, ["note", "rm", "note-2"]).exit_code == 1
+    assert runner.invoke(app, ["note", "restore", "note-2"]).exit_code == 0
+    assert "drop me" in runner.invoke(app, ["show", "recs"]).stdout
+
+    assert runner.invoke(app, ["note", "restore", "note-99"]).exit_code == 1
+
+
+def test_stream_rm_restore_and_shared_note(integration_store: Path):
+    runner.invoke(app, ["stream", "create", "Recs"])
+    runner.invoke(app, ["stream", "create", "Employment"])
+    # rafia rides a note in each stream
+    runner.invoke(app, ["note", "add", "met rafia", "-s", "recs"])  # note-1
+    runner.invoke(app, ["entity", "link", "note-1", "Rafia", "-k", "person"])
+    runner.invoke(app, ["note", "add", "rafia asked about a role", "-s", "employment"])
+    runner.invoke(app, ["entity", "link", "note-2", "Rafia", "-k", "person"])
+
+    assert runner.invoke(app, ["stream", "rm", "recs"]).exit_code == 0
+    assert runner.invoke(app, ["show", "recs"]).exit_code == 1  # stream gone
+    assert "recs" not in runner.invoke(app, ["stream", "list"]).stdout
+    # rafia survives via the employment note (cross-stream)
+    assert "rafia" in runner.invoke(app, ["entity", "list"]).stdout
+    assert "rafia asked" in runner.invoke(app, ["show", "rafia"]).stdout
+
+    # restore brings the stream + its notes back
+    assert runner.invoke(app, ["stream", "restore", "recs"]).exit_code == 0
+    assert "met rafia" in runner.invoke(app, ["show", "recs"]).stdout
+    assert runner.invoke(app, ["stream", "restore", "nope"]).exit_code == 1
+
+
+def test_entity_rm_purges_notes_and_derived_entities(integration_store: Path):
+    runner.invoke(app, ["stream", "create", "Recs"])
+    runner.invoke(app, ["note", "add", "plain note", "-s", "recs"])  # note-1, no entity
+    runner.invoke(app, ["note", "add", "rafia and travis", "-s", "recs"])  # note-2
+    runner.invoke(app, ["entity", "link", "note-2", "Rafia", "-k", "person"])
+    runner.invoke(app, ["entity", "link", "note-2", "Travis", "-k", "person"])
+
+    # rm rafia purges note-2 → travis (riding only that note) vanishes too; note-1 stays
+    assert runner.invoke(app, ["entity", "rm", "rafia"]).exit_code == 0
+    out = runner.invoke(app, ["entity", "list"]).stdout
+    assert "rafia" not in out and "travis" not in out
+    recs = runner.invoke(app, ["show", "recs"]).stdout
+    assert "plain note" in recs and "rafia and travis" not in recs
+
+    # restore rafia → its note (and travis) come back
+    assert runner.invoke(app, ["entity", "restore", "rafia"]).exit_code == 0
+    out = runner.invoke(app, ["entity", "list"]).stdout
+    assert "rafia" in out and "travis" in out
+    assert runner.invoke(app, ["entity", "rm", "ghost"]).exit_code == 1

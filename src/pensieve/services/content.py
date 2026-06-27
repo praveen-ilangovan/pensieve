@@ -188,11 +188,22 @@ class ContentService:
             return note
 
     def delete_note(self, note_id: str) -> None:
-        """Truly remove a note (and its attachments). Raises ``NoteNotFound``."""
+        """**Soft-delete** a note — it stops being live, any entity that loses its last
+        live note disappears (derived), and it can be brought back with ``restore_note``.
+        (A genuinely stream-level note with no entities simply leaves that stream's view.)
+        Raises ``NoteNotFound``."""
         with self._uow() as uow:
-            if uow.repo.get_note(note_id) is None:
+            if uow.repo.get_note(note_id) is None:  # already-deleted reads as absent
                 raise NoteNotFound(f"No note '{note_id}'")
-            uow.repo.delete_note(note_id)
+            uow.repo.set_note_deleted(note_id, _utcnow())
+            uow.commit()
+
+    def restore_note(self, note_id: str) -> None:
+        """Un-delete a soft-deleted note (raw lookup — it's hidden from normal reads).
+        Its entities reappear if it was their last note. Raises ``NoteNotFound``."""
+        with self._uow() as uow:
+            if not uow.repo.set_note_deleted(note_id, None):
+                raise NoteNotFound(f"No note '{note_id}'")
             uow.commit()
 
     def get_stream_view(self, node_id: str) -> dict[str, Any]:

@@ -70,12 +70,13 @@ class EntityService:
             return entity
 
     def get_entity_view(self, entity_id: str) -> dict[str, Any]:
-        """Recall: the entity + every note that references it (promoted or not)."""
+        """Recall: the entity + every **live** note that references it (promoted or not).
+        An entity with no live notes has effectively vanished (derived) → ``EntityNotFound``."""
         with self._uow() as uow:
             entity = uow.repo.get_entity(entity_id)
-            if entity is None:
+            notes = uow.repo.notes_for_entity(entity_id) if entity is not None else []
+            if entity is None or not notes:
                 raise EntityNotFound(f"No entity '{entity_id}'")
-            notes = uow.repo.notes_for_entity(entity_id)
             return {
                 "id": entity.id,
                 "name": entity.name,
@@ -91,14 +92,18 @@ class EntityService:
             }
 
     def list_entities(self) -> list[dict[str, Any]]:
-        """The whole registry with counts — what the agent loads to resolve against."""
+        """The live registry with counts — what the agent loads to resolve against.
+        Entities with no live note are derived-gone and omitted."""
         with self._uow() as uow:
-            return [self._view(uow, e) for e in uow.repo.list_entities()]
+            views = [self._view(uow, e) for e in uow.repo.list_entities()]
+            return [v for v in views if v["count"] >= 1]
 
     def find_entities(self, query: str) -> list[dict[str, Any]]:
-        """Fuzzy candidate shortlist (name/alias substring) with counts."""
+        """Fuzzy candidate shortlist (name/alias substring) with counts. Entities with no
+        live note are omitted (derived-gone)."""
         with self._uow() as uow:
-            return [self._view(uow, e) for e in uow.repo.find_entities(query)]
+            views = [self._view(uow, e) for e in uow.repo.find_entities(query)]
+            return [v for v in views if v["count"] >= 1]
 
     def promote_entity(self, entity_id: str, parent_stream: str) -> Node:
         """Promote an entity into its own **thread** under a stream: create the node,
@@ -167,6 +172,37 @@ class EntityService:
             uow.repo.save_entity(entity)
             uow.commit()
             return entity
+
+    def delete_entity(self, entity_id: str) -> None:
+        """Remove an entity (and its thread, if promoted): **purge its notes** — soft-delete
+        every note tagged with it — and soft-delete its thread node. Any *other* entity left
+        with no live note vanishes too (derived, recursive). A genuinely entity-less note
+        elsewhere is untouched. Reversible via ``restore_entity``. Raises ``EntityNotFound``."""
+        with self._uow() as uow:
+            entity = uow.repo.get_entity(
+                entity_id
+            )  # raw — entities carry no deleted_at
+            if entity is None:
+                raise EntityNotFound(f"No entity '{entity_id}'")
+            now = _utcnow()
+            for note_id in uow.repo.note_ids_for_entity(entity_id):
+                uow.repo.set_note_deleted(note_id, now)
+            if entity.node_id is not None:
+                uow.repo.set_node_deleted(entity.node_id, now)
+            uow.commit()
+
+    def restore_entity(self, entity_id: str) -> None:
+        """Reverse ``delete_entity``: un-delete the entity's notes and its thread node.
+        Derived entities riding those notes reappear too. Raises ``EntityNotFound``."""
+        with self._uow() as uow:
+            entity = uow.repo.get_entity(entity_id)
+            if entity is None:
+                raise EntityNotFound(f"No entity '{entity_id}'")
+            for note_id in uow.repo.note_ids_for_entity(entity_id):
+                uow.repo.set_note_deleted(note_id, None)
+            if entity.node_id is not None:
+                uow.repo.set_node_deleted(entity.node_id, None)
+            uow.commit()
 
     def _view(self, uow: UnitOfWork, entity: Entity) -> dict[str, Any]:
         count = uow.repo.count_for_entity(entity.id)

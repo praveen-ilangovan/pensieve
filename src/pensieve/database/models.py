@@ -39,6 +39,7 @@ class Node(SQLModel, table=True):
     schema_version: int = SCHEMA_VERSION
     created: datetime = Field(default_factory=_utcnow)
     updated: datetime = Field(default_factory=_utcnow)
+    deleted_at: datetime | None = None  # soft-delete (null = active)
 
 
 class Edge(SQLModel, table=True):
@@ -64,6 +65,7 @@ class Note(SQLModel, table=True):
     text: str
     created: datetime = Field(default_factory=_utcnow)
     updated: datetime = Field(default_factory=_utcnow)
+    deleted_at: datetime | None = None  # soft-delete (null = active)
     # provenance (agent-agnostic): who last wrote it, and how.
     actor: str | None = None  # "cli" | "claude-code" | …
     interface: str | None = None  # "cli" | "mcp"

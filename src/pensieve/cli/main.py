@@ -4,12 +4,13 @@ cli/main.py
 Pensieve CLI — the engine's **op** surface, organised by concept:
 
     pensieve init | show <id> | find <q> [--type …]
-    pensieve stream  create | list | edit* | rm*
-    pensieve note    add | edit | rm
-    pensieve entity  link | list | promote | edit* | rm*
+    pensieve stream  create | list | edit | rm | restore
+    pensieve note    add | edit | rm | restore
+    pensieve entity  link | unlink | list | promote | edit | rm | restore
 
-(* = surfaced but not implemented yet — its own backend layer.) The judgment-bearing
-flows (capture / fetch) live in the agent skill, not here (see docs/verbs.md §0a).
+``rm`` is a **soft-delete** (reversible via ``restore``); a future ``forget`` will hard
+-delete. The judgment-bearing flows (capture / fetch) live in the agent skill, not here
+(see docs/verbs.md §0a).
 """
 
 from __future__ import annotations
@@ -41,13 +42,6 @@ entity_app = typer.Typer(
 app.add_typer(stream_app, name="stream")
 app.add_typer(note_app, name="note")
 app.add_typer(entity_app, name="entity")
-
-
-def _not_implemented(what: str) -> None:
-    typer.echo(
-        f"⧗ '{what}' is not implemented yet (planned, separate layer).", err=True
-    )
-    raise typer.Exit(code=1)
 
 
 # --------------------------------------------------------------------------- #
@@ -171,8 +165,31 @@ def stream_edit(
 
 @stream_app.command("rm")
 def stream_rm(stream: str = typer.Argument(..., help="Stream id to remove.")) -> None:
-    """Delete a stream (and decide what happens to its threads/notes)."""
-    _not_implemented("stream rm")
+    """Remove a stream and its threads (soft — bring it back with 'stream restore').
+
+    Notes living only here go too; ones shared with another stream survive there.
+    """
+    try:
+        stream_service().delete_stream(stream)
+    except NodeNotFound as exc:
+        typer.echo(f"✗ No stream '{stream}'", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(
+        f"✓ removed stream '{stream}' (restore with: pensieve stream restore {stream})"
+    )
+
+
+@stream_app.command("restore")
+def stream_restore(
+    stream: str = typer.Argument(..., help="Stream id to bring back."),
+) -> None:
+    """Bring back a removed stream (and its threads)."""
+    try:
+        stream_service().restore_stream(stream)
+    except NodeNotFound as exc:
+        typer.echo(f"✗ No stream '{stream}'", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"✓ restored stream '{stream}'")
 
 
 # --------------------------------------------------------------------------- #
@@ -213,13 +230,26 @@ def note_edit(
 
 @note_app.command("rm")
 def note_rm(note: str = typer.Argument(..., help="Note id to remove.")) -> None:
-    """Delete a note (truly removes it)."""
+    """Remove a note (soft — bring it back with 'note restore')."""
     try:
         content_service().delete_note(note)
     except NoteNotFound as exc:
         typer.echo(f"✗ No note '{note}'", err=True)
         raise typer.Exit(code=1) from exc
-    typer.echo(f"✓ deleted {note}")
+    typer.echo(f"✓ removed {note} (restore with: pensieve note restore {note})")
+
+
+@note_app.command("restore")
+def note_restore(
+    note: str = typer.Argument(..., help="Note id to bring back."),
+) -> None:
+    """Bring back a removed note."""
+    try:
+        content_service().restore_note(note)
+    except NoteNotFound as exc:
+        typer.echo(f"✗ No note '{note}'", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"✓ restored {note}")
 
 
 # --------------------------------------------------------------------------- #
@@ -315,8 +345,32 @@ def entity_edit(
 
 @entity_app.command("rm")
 def entity_rm(entity: str = typer.Argument(..., help="Entity id to remove.")) -> None:
-    """Delete an entity (and decide what happens to its tags/thread)."""
-    _not_implemented("entity rm")
+    """Remove an entity and its thread (soft — bring it back with 'entity restore').
+
+    Purges the notes about it; notes that were only about this entity (and the entities
+    riding only those notes) go too.
+    """
+    try:
+        entity_service().delete_entity(entity)
+    except EntityNotFound as exc:
+        typer.echo(f"✗ No entity '{entity}'", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(
+        f"✓ removed entity '{entity}' (restore with: pensieve entity restore {entity})"
+    )
+
+
+@entity_app.command("restore")
+def entity_restore(
+    entity: str = typer.Argument(..., help="Entity id to bring back."),
+) -> None:
+    """Bring back a removed entity (its notes and thread)."""
+    try:
+        entity_service().restore_entity(entity)
+    except EntityNotFound as exc:
+        typer.echo(f"✗ No entity '{entity}'", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"✓ restored entity '{entity}'")
 
 
 def main() -> None:

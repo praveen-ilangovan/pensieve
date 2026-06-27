@@ -78,20 +78,24 @@ class TestContentServiceIntegration:
         content.delete_note(note.id)
         assert ContentService(SqliteUnitOfWork).get_stream_view("recs")["notes"] == []
 
-    def test_delete_tagged_note_no_fk_error(self, integration_store: Path):
-        # deleting a tagged note must not trip the tags FK (real SQLite, foreign_keys=ON)
+    def test_delete_tagged_note_is_soft_and_derives_entity(self, integration_store: Path):
+        # soft-deleting a tagged note: tag row stays, but the entity loses its only live
+        # note → it's derived-gone from the registry; restore brings both back.
         StreamService(SqliteUnitOfWork).create_stream("Recs")
         content = ContentService(SqliteUnitOfWork)
         note = content.add_note(
             "recs", "met rafia", entities=[{"name": "Rafia", "kind": "person"}]
         )
-        content.delete_note(note.id)  # would raise IntegrityError if tags weren't cleaned
+        content.delete_note(note.id)
 
+        assert [e["id"] for e in EntityService(SqliteUnitOfWork).list_entities()] == []
+
+        content.restore_note(note.id)
         rafia = next(
             e for e in EntityService(SqliteUnitOfWork).list_entities()
             if e["id"] == "rafia"
         )
-        assert rafia["count"] == 0
+        assert rafia["count"] == 1
 
     def test_errors(self, integration_store: Path):
         content = ContentService(SqliteUnitOfWork)
@@ -113,15 +117,15 @@ class TestEntityServiceIntegration:
         with pytest.raises(EntityExists):
             entities.create_entity("Rafia Naseem", "person")
 
-        # fuzzy find over name + alias (real SQLite LIKE)
-        assert [e["id"] for e in entities.find_entities("rafia")] == ["rafia-naseem"]
-        assert [e["id"] for e in entities.find_entities("reader")] == ["rafia-naseem"]
-
-        # tag a note via the repo, count reflects it (durable across a fresh service)
+        # tag a note so the entity is live (find/list surface only live entities)
         note = content.add_note("recs", "met rafia")
         with SqliteUnitOfWork() as uow:
             uow.repo.tag_note(note.id, "rafia-naseem")
             uow.commit()
+
+        # fuzzy find over name + alias (real SQLite LIKE)
+        assert [e["id"] for e in entities.find_entities("rafia")] == ["rafia-naseem"]
+        assert [e["id"] for e in entities.find_entities("reader")] == ["rafia-naseem"]
 
         rafia = next(
             e for e in EntityService(SqliteUnitOfWork).list_entities()

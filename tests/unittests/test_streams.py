@@ -60,3 +60,57 @@ def test_edit_stream_keeps_id(services):
 
     with pytest.raises(NodeNotFound):
         services.streams.edit_stream("nope", name="x")
+
+
+def test_delete_stream_soft_and_cascades_threads(services):
+    services.streams.create_stream("Recs")
+    services.content.add_note(
+        "recs", "met rafia", entities=[{"name": "Rafia", "kind": "person"}]
+    )
+    services.entities.promote_entity("rafia", "recs")  # thread under recs
+
+    services.streams.delete_stream("recs")
+
+    # stream + its thread vanish from normal reads; entity is derived-gone
+    assert services.streams.list_streams() == []
+    assert services.streams.get_stream("recs") is None
+    assert services.streams.get_stream("rafia") is None
+    assert services.entities.list_entities() == []
+
+    with pytest.raises(NodeNotFound):
+        services.streams.delete_stream("nope")
+
+
+def test_restore_stream_brings_back_stream_and_threads(services):
+    services.streams.create_stream("Recs")
+    services.content.add_note(
+        "recs", "met rafia", entities=[{"name": "Rafia", "kind": "person"}]
+    )
+    services.entities.promote_entity("rafia", "recs")
+    services.streams.delete_stream("recs")
+
+    services.streams.restore_stream("recs")
+
+    assert [n.id for n in services.streams.list_streams()] == ["recs"]
+    assert services.streams.get_stream("rafia") is not None  # thread restored
+    assert [e["id"] for e in services.entities.list_entities()] == ["rafia"]
+
+    with pytest.raises(NodeNotFound):
+        services.streams.restore_stream("nope")
+
+
+def test_delete_stream_keeps_cross_stream_note_live(services):
+    services.streams.create_stream("Recs")
+    services.streams.create_stream("Employment")
+    services.content.add_note(
+        "recs", "met rafia", entities=[{"name": "Rafia", "kind": "person"}]
+    )
+    services.content.add_note(
+        "employment", "rafia asked about a role", entities=[{"id": "rafia"}]
+    )
+
+    services.streams.delete_stream("recs")
+
+    # rafia survives via the employment note (cross-stream) → still 1 live note there
+    rafia = services.entities.get_entity_view("rafia")
+    assert [n["text"] for n in rafia["notes"]] == ["rafia asked about a role"]

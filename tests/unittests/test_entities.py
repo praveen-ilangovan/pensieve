@@ -49,8 +49,16 @@ def test_list_with_counts_and_promotable(services, monkeypatch):
 
 
 def test_find_by_name_and_alias(services):
-    services.entities.create_entity("Rafia Naseem", "person", aliases=["The Reader Life"])
-    services.entities.create_entity("Travis King", "person")
+    # find/list surface only LIVE entities (≥1 live note), so give each a note
+    services.streams.create_stream("Recs")
+    services.content.add_note(
+        "recs",
+        "met rafia",
+        entities=[{"name": "Rafia Naseem", "kind": "person", "aliases": ["The Reader Life"]}],
+    )
+    services.content.add_note(
+        "recs", "met travis", entities=[{"name": "Travis King", "kind": "person"}]
+    )
 
     assert [e["id"] for e in services.entities.find_entities("rafia")] == ["rafia-naseem"]
     # alias substring also matches
@@ -185,6 +193,68 @@ def test_get_entity_view(services):
 
     with pytest.raises(EntityNotFound):
         services.entities.get_entity_view("ghost")
+
+
+def test_delete_entity_purges_notes_and_derived_entities(services):
+    services.streams.create_stream("Recs")
+    n_plain = services.content.add_note("recs", "plain note")  # no entities
+    services.content.add_note(
+        "recs",
+        "rafia and travis",
+        entities=[
+            {"name": "Rafia", "kind": "person"},
+            {"name": "Travis", "kind": "person"},
+        ],
+    )
+
+    services.entities.delete_entity("rafia")
+
+    # the shared note is purged → travis (riding only it) is derived-gone too
+    assert services.entities.list_entities() == []
+    # the entity-less stream note survives
+    recs = services.content.get_stream_view("recs")
+    assert [n["id"] for n in recs["notes"]] == [n_plain.id]
+
+    with pytest.raises(EntityNotFound):
+        services.entities.delete_entity("ghost")
+
+
+def test_delete_entity_with_thread_then_restore(services):
+    services.streams.create_stream("Recs")
+    services.content.add_note(
+        "recs", "met rafia", entities=[{"name": "Rafia", "kind": "person"}]
+    )
+    services.content.add_note(
+        "recs",
+        "rafia and travis",
+        entities=[
+            {"id": "rafia"},
+            {"name": "Travis", "kind": "person"},
+        ],
+    )
+    services.entities.promote_entity("rafia", "recs")
+
+    services.entities.delete_entity("rafia")
+    assert services.streams.get_stream("rafia") is None  # thread node gone
+    assert services.entities.list_entities() == []  # travis rode only purged notes
+
+    services.entities.restore_entity("rafia")
+    assert services.streams.get_stream("rafia") is not None  # thread back
+    assert {e["id"] for e in services.entities.list_entities()} == {"rafia", "travis"}
+
+    with pytest.raises(EntityNotFound):
+        services.entities.restore_entity("ghost")
+
+
+def test_removed_entity_recall_raises(services):
+    services.streams.create_stream("Recs")
+    n = services.content.add_note(
+        "recs", "met rafia", entities=[{"name": "Rafia", "kind": "person"}]
+    )
+    services.content.delete_note(n.id)  # rafia loses its only live note
+
+    with pytest.raises(EntityNotFound):
+        services.entities.get_entity_view("rafia")  # derived-gone
 
 
 def test_notes_and_count_for_entity(services):

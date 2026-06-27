@@ -27,7 +27,8 @@ class SqliteRepository:
 
     # nodes ----------------------------------------------------------------
     def get_node(self, node_id: str) -> Node | None:
-        return self._session.get(Node, node_id)
+        node = self._session.get(Node, node_id)
+        return node if node is not None and node.deleted_at is None else None
 
     def add_node(self, node: Node) -> None:
         self._session.add(node)
@@ -35,23 +36,35 @@ class SqliteRepository:
     def save_node(self, node: Node) -> None:
         self._session.add(node)
 
+    def set_node_deleted(self, node_id: str, when: object) -> bool:
+        node = self._session.get(Node, node_id)  # raw (may be deleted) — for rm/restore
+        if node is None:
+            return False
+        node.deleted_at = when  # type: ignore[assignment]
+        self._session.add(node)
+        return True
+
     def list_streams(self) -> list[Node]:
         statement = (
-            select(Node).where(col(Node.parent_id).is_(None)).order_by(col(Node.label))
+            select(Node)
+            .where(col(Node.parent_id).is_(None))
+            .where(col(Node.deleted_at).is_(None))
+            .order_by(col(Node.label))
         )
         return list(self._session.exec(statement))
 
-    def children_of(self, node_id: str) -> list[Node]:
-        statement = (
-            select(Node).where(Node.parent_id == node_id).order_by(col(Node.label))
-        )
-        return list(self._session.exec(statement))
+    def children_of(self, node_id: str, *, include_deleted: bool = False) -> list[Node]:
+        statement = select(Node).where(Node.parent_id == node_id)
+        if not include_deleted:
+            statement = statement.where(col(Node.deleted_at).is_(None))
+        return list(self._session.exec(statement.order_by(col(Node.label))))
 
     def find_nodes(self, query: str) -> list[Node]:
         like = f"%{query.strip()}%"
         statement = (
             select(Node)
             .where(or_(col(Node.label).ilike(like), col(Node.id).ilike(like)))
+            .where(col(Node.deleted_at).is_(None))
             .order_by(col(Node.label))
         )
         return list(self._session.exec(statement))
@@ -61,10 +74,19 @@ class SqliteRepository:
         self._session.add(note)
 
     def get_note(self, note_id: str) -> Note | None:
-        return self._session.get(Note, note_id)
+        note = self._session.get(Note, note_id)
+        return note if note is not None and note.deleted_at is None else None
 
     def save_note(self, note: Note) -> None:
         self._session.add(note)
+
+    def set_note_deleted(self, note_id: str, when: object) -> bool:
+        note = self._session.get(Note, note_id)  # raw (may be deleted) — for rm/restore
+        if note is None:
+            return False
+        note.deleted_at = when  # type: ignore[assignment]
+        self._session.add(note)
+        return True
 
     def delete_note(self, note_id: str) -> None:
         for att in self._session.exec(
@@ -78,10 +100,12 @@ class SqliteRepository:
             self._session.delete(note)
 
     def notes_for(self, node_id: str) -> list[Note]:
+        # the node is visible (caller navigated to it) → its non-deleted notes are live
         statement = (
             select(Note)
             .join(Attachment, col(Attachment.note_id) == col(Note.id))
             .where(Attachment.node_id == node_id)
+            .where(col(Note.deleted_at).is_(None))
             .order_by(col(Note.created))
         )
         return list(self._session.exec(statement))
@@ -138,18 +162,37 @@ class SqliteRepository:
         statement = select(Tag.entity_id).where(Tag.note_id == note_id)
         return list(self._session.exec(statement))
 
+    def note_ids_for_entity(self, entity_id: str) -> list[str]:
+        """All note ids tagged with the entity — raw (incl. deleted), for rm/restore."""
+        return list(
+            self._session.exec(select(Tag.note_id).where(Tag.entity_id == entity_id))
+        )
+
     def notes_for_entity(self, entity_id: str) -> list[Note]:
+        # live = note not deleted AND attached to a visible node
         statement = (
             select(Note)
             .join(Tag, col(Tag.note_id) == col(Note.id))
+            .join(Attachment, col(Attachment.note_id) == col(Note.id))
+            .join(Node, col(Node.id) == col(Attachment.node_id))
             .where(Tag.entity_id == entity_id)
+            .where(col(Note.deleted_at).is_(None))
+            .where(col(Node.deleted_at).is_(None))
+            .distinct()
             .order_by(col(Note.created))
         )
         return list(self._session.exec(statement))
 
     def count_for_entity(self, entity_id: str) -> int:
         statement = (
-            select(func.count()).select_from(Tag).where(Tag.entity_id == entity_id)
+            select(func.count(func.distinct(col(Note.id))))
+            .select_from(Tag)
+            .join(Note, col(Note.id) == col(Tag.note_id))
+            .join(Attachment, col(Attachment.note_id) == col(Note.id))
+            .join(Node, col(Node.id) == col(Attachment.node_id))
+            .where(Tag.entity_id == entity_id)
+            .where(col(Note.deleted_at).is_(None))
+            .where(col(Node.deleted_at).is_(None))
         )
         return int(self._session.exec(statement).one())
 

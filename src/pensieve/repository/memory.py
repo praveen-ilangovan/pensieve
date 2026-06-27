@@ -57,10 +57,24 @@ class InMemoryRepository:
     def __init__(self, state: MemoryState) -> None:
         self._state = state
 
+    # liveness helpers -----------------------------------------------------
+    def _node_visible(self, node_id: str) -> bool:
+        node = self._state.nodes.get(node_id)
+        return node is not None and node.deleted_at is None
+
+    def _note_live(self, note_id: str) -> bool:
+        note = self._state.notes.get(note_id)
+        if note is None or note.deleted_at is not None:
+            return False
+        return any(
+            nid == note_id and self._node_visible(target)
+            for (nid, target) in self._state.attachments
+        )
+
     # nodes ----------------------------------------------------------------
     def get_node(self, node_id: str) -> Node | None:
         node = self._state.nodes.get(node_id)
-        return _clone(node) if node is not None else None
+        return _clone(node) if node is not None and node.deleted_at is None else None
 
     def add_node(self, node: Node) -> None:
         self._state.nodes[node.id] = node
@@ -68,12 +82,27 @@ class InMemoryRepository:
     def save_node(self, node: Node) -> None:
         self._state.nodes[node.id] = node
 
+    def set_node_deleted(self, node_id: str, when: object) -> bool:
+        node = self._state.nodes.get(node_id)  # raw (may be deleted) — for rm/restore
+        if node is None:
+            return False
+        node.deleted_at = when  # type: ignore[assignment]
+        return True
+
     def list_streams(self) -> list[Node]:
-        streams = [n for n in self._state.nodes.values() if n.parent_id is None]
+        streams = [
+            n
+            for n in self._state.nodes.values()
+            if n.parent_id is None and n.deleted_at is None
+        ]
         return [_clone(n) for n in sorted(streams, key=lambda n: n.label)]
 
-    def children_of(self, node_id: str) -> list[Node]:
-        kids = [n for n in self._state.nodes.values() if n.parent_id == node_id]
+    def children_of(self, node_id: str, *, include_deleted: bool = False) -> list[Node]:
+        kids = [
+            n
+            for n in self._state.nodes.values()
+            if n.parent_id == node_id and (include_deleted or n.deleted_at is None)
+        ]
         return [_clone(n) for n in sorted(kids, key=lambda n: n.label)]
 
     def find_nodes(self, query: str) -> list[Node]:
@@ -81,7 +110,7 @@ class InMemoryRepository:
         out = [
             n
             for n in self._state.nodes.values()
-            if q in n.label.lower() or q in n.id.lower()
+            if n.deleted_at is None and (q in n.label.lower() or q in n.id.lower())
         ]
         return [_clone(n) for n in sorted(out, key=lambda n: n.label)]
 
@@ -91,10 +120,17 @@ class InMemoryRepository:
 
     def get_note(self, note_id: str) -> Note | None:
         note = self._state.notes.get(note_id)
-        return _clone(note) if note is not None else None
+        return _clone(note) if note is not None and note.deleted_at is None else None
 
     def save_note(self, note: Note) -> None:
         self._state.notes[note.id] = note
+
+    def set_note_deleted(self, note_id: str, when: object) -> bool:
+        note = self._state.notes.get(note_id)  # raw (may be deleted) — for rm/restore
+        if note is None:
+            return False
+        note.deleted_at = when  # type: ignore[assignment]
+        return True
 
     def delete_note(self, note_id: str) -> None:
         self._state.notes.pop(note_id, None)
@@ -104,8 +140,13 @@ class InMemoryRepository:
         self._state.tags = {t for t in self._state.tags if t[0] != note_id}
 
     def notes_for(self, node_id: str) -> list[Note]:
+        # the node is visible (caller navigated to it) → its non-deleted notes are live
         ids = [nid for (nid, target) in self._state.attachments if target == node_id]
-        notes = [self._state.notes[i] for i in ids if i in self._state.notes]
+        notes = [
+            self._state.notes[i]
+            for i in ids
+            if i in self._state.notes and self._state.notes[i].deleted_at is None
+        ]
         return [_clone(n) for n in sorted(notes, key=lambda n: n.created)]
 
     # attachments ----------------------------------------------------------
@@ -149,13 +190,26 @@ class InMemoryRepository:
     def tags_for_note(self, note_id: str) -> list[str]:
         return [eid for (nid, eid) in self._state.tags if nid == note_id]
 
+    def note_ids_for_entity(self, entity_id: str) -> list[str]:
+        """All note ids tagged with the entity — raw (incl. deleted), for rm/restore."""
+        return [nid for (nid, eid) in self._state.tags if eid == entity_id]
+
     def notes_for_entity(self, entity_id: str) -> list[Note]:
-        ids = [nid for (nid, eid) in self._state.tags if eid == entity_id]
+        # live = note not deleted AND attached to a visible node
+        ids = [
+            nid
+            for (nid, eid) in self._state.tags
+            if eid == entity_id and self._note_live(nid)
+        ]
         notes = [self._state.notes[i] for i in ids if i in self._state.notes]
         return [_clone(n) for n in sorted(notes, key=lambda n: n.created)]
 
     def count_for_entity(self, entity_id: str) -> int:
-        return sum(1 for (_, eid) in self._state.tags if eid == entity_id)
+        return sum(
+            1
+            for (nid, eid) in self._state.tags
+            if eid == entity_id and self._note_live(nid)
+        )
 
     def next_id(self, scope: str, kind: str, prefix: str) -> str:
         n = self._state.counters.get((scope, kind), 0) + 1

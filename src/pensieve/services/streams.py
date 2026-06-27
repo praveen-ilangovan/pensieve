@@ -83,3 +83,30 @@ class StreamService:
             uow.repo.save_node(node)
             uow.commit()
             return node
+
+    def delete_stream(self, stream_id: str) -> None:
+        """Soft-delete a stream and its threads. Notes are **not** touched — they go
+        non-live transitively (a note loses liveness when all its visible homes vanish),
+        so a note also living in another stream survives there, and entities with no
+        remaining live note disappear (derived). Reversible via ``restore_stream``.
+        Raises ``NodeNotFound``."""
+        with self._uow() as uow:
+            node = uow.repo.get_node(stream_id)
+            if node is None:
+                raise NodeNotFound(f"No node '{stream_id}'")
+            now = datetime.now(timezone.utc)
+            for child in uow.repo.children_of(stream_id):  # threads under it
+                uow.repo.set_node_deleted(child.id, now)
+            uow.repo.set_node_deleted(stream_id, now)
+            uow.commit()
+
+    def restore_stream(self, stream_id: str) -> None:
+        """Un-delete a stream and its (soft-deleted) threads; their notes relive
+        transitively and derived entities reappear. Raises ``NodeNotFound``."""
+        with self._uow() as uow:
+            # raw lookup — get_node hides soft-deleted rows
+            if not uow.repo.set_node_deleted(stream_id, None):
+                raise NodeNotFound(f"No node '{stream_id}'")
+            for child in uow.repo.children_of(stream_id, include_deleted=True):
+                uow.repo.set_node_deleted(child.id, None)
+            uow.commit()

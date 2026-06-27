@@ -32,7 +32,16 @@ def test_fresh_store_migrates_to_head(integration_store: Path):
         "alembic_version",
     } <= _tables()
     assert {"history", "todos"}.isdisjoint(_tables())  # dropped by 0003
-    assert {"id", "text", "created", "updated", "actor", "interface"} == _columns("notes")
+    assert {
+        "id",
+        "text",
+        "created",
+        "updated",
+        "deleted_at",  # soft-delete (0005)
+        "actor",
+        "interface",
+    } == _columns("notes")
+    assert "deleted_at" in _columns("nodes")  # soft-delete (0005)
     assert _columns("attachments") == {"note_id", "node_id"}
     assert {"id", "name", "kind", "aliases", "node_id"} <= _columns("entities")
 
