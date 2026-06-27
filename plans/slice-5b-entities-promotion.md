@@ -177,6 +177,16 @@ decided later with real promoted data in front of us.
   - Suite **56 green**, eval 16/16.
   - *Logged for later:* promote-to-top-level-stream (a topic spanning streams could become
     its own stream — its own slice); add-to-thread-doesn't-tag wrinkle is now moot (rejected).
+- **CLI restructure — vocabulary/namespaces** — ✅ done. Reorganised the grab-bag into
+  `pensieve <noun> <verb>`: top-level `init` / `show <id>` (universal — stream/thread/
+  **entity**) / `find <q> [--type]`; `stream create|list` (+`edit`/`rm` **stubs**);
+  `note add|edit|rm`; `entity link|list|promote` (+`edit`/`rm` **stubs**). `tag`→`entity
+  link` (dropped the leaked storage word). `show <stream>` now **lists its threads**
+  (`children_of` + view), and `find` spans nodes+entities (`find_nodes`). No `thread`
+  namespace (a thread is a node you `show`, born via `entity promote`). Stubs print "not
+  implemented yet" + exit 1 (backend = its own layer; cascade/rename decisions deferred).
+  `docs/cli.md` added; README + install.sh hints updated. Suite **55 green**, lint clean.
+  *(Minor: `find` shows a promoted entity as both thread + entity — dedup later.)*
 - **Chunk 5 — live verify (user-run)** — pending. `./install.sh` (new skill) → restart
   Claude → clear `~/.pensieve` → re-capture the Rafia/Travis material → watch entities form
   (no dupes), Rafia cross the threshold, get proposed + promoted to a thread; `pensieve

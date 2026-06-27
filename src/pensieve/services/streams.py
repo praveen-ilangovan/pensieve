@@ -51,3 +51,8 @@ class StreamService:
         """A single node by id (None if absent)."""
         with self._uow() as uow:
             return uow.repo.get_node(node_id)
+
+    def find_nodes(self, query: str) -> list[Node]:
+        """Fuzzy match over node label + id (streams and threads)."""
+        with self._uow() as uow:
+            return uow.repo.find_nodes(query)

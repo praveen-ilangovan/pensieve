@@ -1,9 +1,15 @@
 """
 cli/main.py
 
-Pensieve CLI entry point — the engine's **op** surface (init / create / ls / add /
-show / edit / rm). The judgment-bearing flows (capture / fetch) live in the agent skill,
-not here (see docs/verbs.md §0a).
+Pensieve CLI — the engine's **op** surface, organised by concept:
+
+    pensieve init | show <id> | find <q> [--type …]
+    pensieve stream  create | list | edit* | rm*
+    pensieve note    add | edit | rm
+    pensieve entity  link | list | promote | edit* | rm*
+
+(* = surfaced but not implemented yet — its own backend layer.) The judgment-bearing
+flows (capture / fetch) live in the agent skill, not here (see docs/verbs.md §0a).
 """
 
 from __future__ import annotations
@@ -23,21 +29,30 @@ from ..factory import content_service, entity_service, stream_service
 
 app = typer.Typer(
     name="pensieve",
-    help=(
-        "Pensieve — manually-triggered, multi-stream agent memory.\n\n"
-        "A stream is a top-level domain (recs, employment, …); notes hold information "
-        "and attach to it. These commands are the mechanical op surface — the "
-        "judgment-bearing capture/fetch flows live in the agent skill."
-    ),
-    epilog=(
-        "Typical flow: **create** a stream → **add** notes to it → **show** it. "
-        "Run `pensieve COMMAND --help` for a per-command example."
-    ),
+    help="Pensieve — manually-triggered, self-organising agent memory.",
     no_args_is_help=True,
     rich_markup_mode="markdown",
 )
+stream_app = typer.Typer(no_args_is_help=True, help="Streams — top-level domains.")
+note_app = typer.Typer(no_args_is_help=True, help="Notes — pieces of information.")
+entity_app = typer.Typer(
+    no_args_is_help=True, help="Entities — people/orgs/topics, and their threads."
+)
+app.add_typer(stream_app, name="stream")
+app.add_typer(note_app, name="note")
+app.add_typer(entity_app, name="entity")
 
 
+def _not_implemented(what: str) -> None:
+    typer.echo(
+        f"⧗ '{what}' is not implemented yet (planned, separate layer).", err=True
+    )
+    raise typer.Exit(code=1)
+
+
+# --------------------------------------------------------------------------- #
+# Top-level: init / show / find
+# --------------------------------------------------------------------------- #
 @app.command()
 def init() -> None:
     """Initialise the Pensieve store (idempotent)."""
@@ -46,55 +61,119 @@ def init() -> None:
 
 
 @app.command()
-def create(
-    stream: str = typer.Option(
-        ..., "--stream", "-s", help="Name of the stream to create."
+def show(
+    target: str = typer.Argument(..., help="A stream, thread, or entity id."),
+) -> None:
+    """Show a stream/thread (its threads + notes) or an entity (its notes)."""
+    try:  # a node first (stream or thread)
+        view = content_service().get_stream_view(target)
+    except NodeNotFound:
+        pass
+    else:
+        purpose = view["purpose"] or "—"
+        typer.echo(f"{view['label']} · {purpose}")
+        if not view["children"] and not view["notes"]:
+            typer.echo("  (empty)")
+        for child in view["children"]:
+            typer.echo(
+                f"  ⤷ thread: {child['id']}  ({child['kind']}) ×{child['count']}"
+            )
+        for note in view["notes"]:
+            typer.echo(f"  {note['id']}  {note['text']}  ({note['date'][:10]})")
+        return
+
+    try:  # else an entity (recall)
+        ev = entity_service().get_entity_view(target)
+    except EntityNotFound as exc:
+        typer.echo(f"✗ No stream, thread, or entity '{target}'", err=True)
+        raise typer.Exit(code=1) from exc
+    badge = " [thread]" if ev["promoted"] else ""
+    typer.echo(f"{ev['name']} ({ev['kind']}) ×{ev['count']}{badge}")
+    for note in ev["notes"]:
+        typer.echo(f"  {note['id']}  {note['text']}  ({note['date'][:10]})")
+
+
+@app.command()
+def find(
+    query: str = typer.Argument(..., help="Name/label/alias substring to search."),
+    node_type: str | None = typer.Option(
+        None, "--type", "-t", help="Narrow to: stream | thread | entity."
     ),
+) -> None:
+    """Fuzzy-search streams, threads, and entities."""
+    rows: list[tuple[str, str, str]] = []
+    if node_type in (None, "stream", "thread"):
+        for node in stream_service().find_nodes(query):
+            pos = "stream" if node.parent_id is None else "thread"
+            if node_type in (None, pos):
+                rows.append((pos, node.id, node.label))
+    if node_type in (None, "entity"):
+        for e in entity_service().find_entities(query):
+            rows.append(("entity", e["id"], f"{e['name']} ×{e['count']}"))
+    if not rows:
+        typer.echo(f"No matches for '{query}'.")
+        return
+    for kind, rid, label in rows:
+        typer.echo(f"{kind:<7} {rid:<22} {label}")
+
+
+# --------------------------------------------------------------------------- #
+# stream
+# --------------------------------------------------------------------------- #
+@stream_app.command("create")
+def stream_create(
+    name: str = typer.Argument(..., help="Display name of the stream."),
     purpose: str = typer.Option(
         "", "--purpose", "-p", help="Why this stream exists (its enduring north-star)."
     ),
 ) -> None:
-    """Create a new stream.
-
-    A stream is a top-level domain of work/life (a subject node with no parent).
-
-    Example: pensieve create -s recs -p "Build Recs"
-    """
+    """Create a new stream (a top-level domain). Example: pensieve stream create Recs -p "…"."""
     try:
-        node = stream_service().create_stream(stream, purpose)
+        node = stream_service().create_stream(name, purpose)
     except StreamExists as exc:
         typer.echo(f"✗ {exc}", err=True)
         raise typer.Exit(code=1) from exc
-    typer.echo(f"✓ Created stream '{node.id}'")
+    typer.echo(f"✓ created stream '{node.id}'")
 
 
-@app.command("ls")
-def ls() -> None:
+@stream_app.command("list")
+def stream_list() -> None:
     """List all streams."""
     rows = stream_service().list_streams()
     if not rows:
-        typer.echo("No streams yet. Create one: pensieve create --stream <name>")
+        typer.echo("No streams yet. Create one: pensieve stream create <name>")
         return
     for node in rows:
-        purpose = node.properties.get("purpose") or "—"
-        typer.echo(f"{node.id:<24} {purpose}")
+        typer.echo(f"{node.id:<24} {node.properties.get('purpose') or '—'}")
 
 
-@app.command()
-def add(
-    text: str = typer.Argument(..., help="The note text to add (quote it)."),
+@stream_app.command("edit")
+def stream_edit(
+    stream: str = typer.Argument(..., help="Stream id."),
+    name: str | None = typer.Option(None, "--name", help="New display name."),
+    purpose: str | None = typer.Option(None, "--purpose", "-p", help="New purpose."),
+) -> None:
+    """Rename / repurpose a stream (id stays stable)."""
+    _not_implemented("stream edit")
+
+
+@stream_app.command("rm")
+def stream_rm(stream: str = typer.Argument(..., help="Stream id to remove.")) -> None:
+    """Delete a stream (and decide what happens to its threads/notes)."""
+    _not_implemented("stream rm")
+
+
+# --------------------------------------------------------------------------- #
+# note
+# --------------------------------------------------------------------------- #
+@note_app.command("add")
+def note_add(
+    text: str = typer.Argument(..., help="The note text (quote it)."),
     stream: str = typer.Option(
         ..., "--stream", "-s", help="Id of the stream (top-level) to add to."
     ),
 ) -> None:
-    """Add a note to a stream.
-
-    Records a piece of information and attaches it to the stream. This is the mechanical
-    `add_note` op; the agent's `capture` flow is what does this with judgment. Notes reach
-    a thread by tagging its entity, not by adding to the thread directly.
-
-    Example: pensieve add "talking to 4 curators" -s recs
-    """
+    """Add a note to a stream. (Notes reach a thread by tagging its entity, not directly.)"""
     try:
         note = content_service().add_note(stream, text, actor="cli", interface="cli")
     except NodeNotFound as exc:
@@ -106,44 +185,12 @@ def add(
     typer.echo(f"✓ added {note.id} to '{stream}'")
 
 
-@app.command()
-def show(
-    stream: str = typer.Argument(..., help="Id of the stream to show."),
-) -> None:
-    """Show a stream's thin view.
-
-    Prints the stream's identity, purpose, and its notes (oldest first).
-
-    Example: pensieve show recs
-    """
-    try:
-        view = content_service().get_stream_view(stream)
-    except NodeNotFound as exc:
-        typer.echo(f"✗ No stream '{stream}'", err=True)
-        raise typer.Exit(code=1) from exc
-
-    purpose = view["purpose"] or "—"
-    typer.echo(f"{view['label']} · {purpose}")
-    notes = view["notes"]
-    if not notes:
-        typer.echo("  (empty)")
-        return
-    for note in notes:
-        date = note["date"][:10]  # YYYY-MM-DD
-        typer.echo(f"  {note['id']}  {note['text']}  ({date})")
-
-
-@app.command()
-def edit(
+@note_app.command("edit")
+def note_edit(
     note: str = typer.Argument(..., help="Note id (e.g. note-3)."),
     text: str = typer.Argument(..., help="The corrected text (replaces the note)."),
 ) -> None:
-    """Rewrite a note's text — for fixing a genuine mistake.
-
-    A change in the world is a *new* note (`add`), not an edit.
-
-    Example: pensieve edit note-3 "corrected text"
-    """
+    """Rewrite a note's text — for fixing a genuine mistake (a world-change is a new note)."""
     try:
         content_service().update_note(note, text, actor="cli", interface="cli")
     except NoteNotFound as exc:
@@ -152,14 +199,9 @@ def edit(
     typer.echo(f"✓ updated {note}")
 
 
-@app.command("rm")
-def rm(
-    note: str = typer.Argument(..., help="Note id to remove (e.g. note-3)."),
-) -> None:
-    """Delete a note (truly removes it).
-
-    Example: pensieve rm note-3
-    """
+@note_app.command("rm")
+def note_rm(note: str = typer.Argument(..., help="Note id to remove.")) -> None:
+    """Delete a note (truly removes it)."""
     try:
         content_service().delete_note(note)
     except NoteNotFound as exc:
@@ -168,9 +210,29 @@ def rm(
     typer.echo(f"✓ deleted {note}")
 
 
-@app.command()
-def entities() -> None:
-    """List the entity registry (people/orgs/topics) with note counts."""
+# --------------------------------------------------------------------------- #
+# entity
+# --------------------------------------------------------------------------- #
+@entity_app.command("link")
+def entity_link(
+    note: str = typer.Argument(..., help="Note id (e.g. note-3)."),
+    name: str = typer.Argument(..., help="Entity name (resolved/created by slug)."),
+    kind: str = typer.Option(
+        "topic", "--kind", "-k", help="person | org | topic (for a new entity)."
+    ),
+) -> None:
+    """Link a note to an entity (creates the entity if new)."""
+    try:
+        ids = content_service().tag_note(note, [{"name": name, "kind": kind}])
+    except NoteNotFound as exc:
+        typer.echo(f"✗ No note '{note}'", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"✓ linked {note} → {ids[0]}")
+
+
+@entity_app.command("list")
+def entity_list() -> None:
+    """List the entity registry with note counts."""
     rows = entity_service().list_entities()
     if not rows:
         typer.echo("No entities yet.")
@@ -180,66 +242,14 @@ def entities() -> None:
         typer.echo(f"{e['id']:<20} {e['kind']:<8} ×{e['count']}{mark}")
 
 
-@app.command()
-def find(
-    query: str = typer.Argument(..., help="Name/alias substring to search."),
-) -> None:
-    """Fuzzy-search the entity registry by name or alias."""
-    rows = entity_service().find_entities(query)
-    if not rows:
-        typer.echo(f"No entities matching '{query}'.")
-        return
-    for e in rows:
-        typer.echo(f"{e['id']:<20} {e['name']} ({e['kind']}) ×{e['count']}")
-
-
-@app.command()
-def tag(
-    note: str = typer.Argument(..., help="Note id (e.g. note-3)."),
-    name: str = typer.Argument(..., help="Entity name (resolved/created by slug)."),
-    kind: str = typer.Option(
-        "topic", "--kind", "-k", help="person | org | topic (for a new entity)."
-    ),
-) -> None:
-    """Tag a note with an entity (creates the entity if new).
-
-    Example: pensieve tag note-3 "Rafia Naseem" -k person
-    """
-    try:
-        ids = content_service().tag_note(note, [{"name": name, "kind": kind}])
-    except NoteNotFound as exc:
-        typer.echo(f"✗ No note '{note}'", err=True)
-        raise typer.Exit(code=1) from exc
-    typer.echo(f"✓ tagged {note} with {ids[0]}")
-
-
-@app.command()
-def entity(
-    entity_id: str = typer.Argument(..., help="Entity id (see 'pensieve entities')."),
-) -> None:
-    """Show an entity and every note that references it (recall)."""
-    try:
-        view = entity_service().get_entity_view(entity_id)
-    except EntityNotFound as exc:
-        typer.echo(f"✗ No entity '{entity_id}'", err=True)
-        raise typer.Exit(code=1) from exc
-    badge = " [thread]" if view["promoted"] else ""
-    typer.echo(f"{view['name']} ({view['kind']}) ×{view['count']}{badge}")
-    for n in view["notes"]:
-        typer.echo(f"  {n['id']}  {n['text']}  ({n['date'][:10]})")
-
-
-@app.command()
-def promote(
-    entity: str = typer.Argument(..., help="Entity id (see 'pensieve entities')."),
+@entity_app.command("promote")
+def entity_promote(
+    entity: str = typer.Argument(..., help="Entity id (see 'pensieve entity list')."),
     stream: str = typer.Option(
         ..., "--stream", "-s", help="Parent stream the new thread lives under."
     ),
 ) -> None:
-    """Promote an entity into its own thread under a stream.
-
-    Example: pensieve promote rafia-naseem -s recs
-    """
+    """Promote an entity into its own thread under a stream."""
     try:
         node = entity_service().promote_entity(entity, stream)
     except EntityNotFound as exc:
@@ -252,6 +262,22 @@ def promote(
         typer.echo(f"✗ {exc}", err=True)
         raise typer.Exit(code=1) from exc
     typer.echo(f"✓ promoted '{entity}' → thread '{node.id}' under '{stream}'")
+
+
+@entity_app.command("edit")
+def entity_edit(
+    entity: str = typer.Argument(..., help="Entity id."),
+    name: str | None = typer.Option(None, "--name", help="New display name."),
+    alias: list[str] | None = typer.Option(None, "--alias", help="Add an alias."),
+) -> None:
+    """Rename an entity / edit its aliases (id stays stable)."""
+    _not_implemented("entity edit")
+
+
+@entity_app.command("rm")
+def entity_rm(entity: str = typer.Argument(..., help="Entity id to remove.")) -> None:
+    """Delete an entity (and decide what happens to its tags/thread)."""
+    _not_implemented("entity rm")
 
 
 def main() -> None:

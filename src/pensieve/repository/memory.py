@@ -72,6 +72,19 @@ class InMemoryRepository:
         streams = [n for n in self._state.nodes.values() if n.parent_id is None]
         return [_clone(n) for n in sorted(streams, key=lambda n: n.label)]
 
+    def children_of(self, node_id: str) -> list[Node]:
+        kids = [n for n in self._state.nodes.values() if n.parent_id == node_id]
+        return [_clone(n) for n in sorted(kids, key=lambda n: n.label)]
+
+    def find_nodes(self, query: str) -> list[Node]:
+        q = query.strip().lower()
+        out = [
+            n
+            for n in self._state.nodes.values()
+            if q in n.label.lower() or q in n.id.lower()
+        ]
+        return [_clone(n) for n in sorted(out, key=lambda n: n.label)]
+
     # notes ----------------------------------------------------------------
     def add_note(self, note: Note) -> None:
         self._state.notes[note.id] = note

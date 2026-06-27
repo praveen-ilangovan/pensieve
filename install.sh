@@ -150,5 +150,5 @@ fi
 bold "✅ Pensieve installed."
 echo "   Restart Claude Code, then from any directory try:"
 echo "     \"what streams do I have? check pensieve\""
-echo "   CLI:   pensieve ls   |   pensieve create --stream \"Travel\" --purpose \"…\""
+echo "   CLI:   pensieve stream list   |   pensieve stream create \"Travel\" -p \"…\""
 echo "   Store: ~/.pensieve"

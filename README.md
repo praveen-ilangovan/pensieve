@@ -30,11 +30,11 @@ Then **restart Claude Code** and, from any directory, ask:
 
 > "what streams do I have? check pensieve"
 
-Your memory lives in `~/.pensieve`. You can also use it as a CLI: `pensieve ls`,
-`pensieve create --stream "Travel" --purpose "…"`.
+Your memory lives in `~/.pensieve`. You can also use it as a CLI: `pensieve stream list`,
+`pensieve stream create "Travel" -p "…"`, `pensieve show <id>`, `pensieve find <q>`.
 
 ### Develop on it
-`make install` (poetry env + hooks) · `make test` · `make check` · `make manual ARGS="ls"`.
+`make install` (poetry env + hooks) · `make test` · `make check` · `make manual ARGS="stream list"`.
 
 This repo is a **dev environment** — nothing global. The project MCP server
 (`.mcp.json`, `poetry run`) and the CLI both use the **local dev store**

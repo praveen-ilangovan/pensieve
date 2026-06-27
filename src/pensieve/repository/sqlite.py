@@ -41,6 +41,21 @@ class SqliteRepository:
         )
         return list(self._session.exec(statement))
 
+    def children_of(self, node_id: str) -> list[Node]:
+        statement = (
+            select(Node).where(Node.parent_id == node_id).order_by(col(Node.label))
+        )
+        return list(self._session.exec(statement))
+
+    def find_nodes(self, query: str) -> list[Node]:
+        like = f"%{query.strip()}%"
+        statement = (
+            select(Node)
+            .where(or_(col(Node.label).ilike(like), col(Node.id).ilike(like)))
+            .order_by(col(Node.label))
+        )
+        return list(self._session.exec(statement))
+
     # notes ----------------------------------------------------------------
     def add_note(self, note: Note) -> None:
         self._session.add(note)

@@ -192,6 +192,15 @@ class ContentService:
             if node is None:
                 raise NodeNotFound(f"No node '{node_id}'")
             notes = uow.repo.notes_for(node_id)
+            children = [
+                {
+                    "id": c.id,
+                    "label": c.label,
+                    "kind": c.kind,
+                    "count": len(uow.repo.notes_for(c.id)),
+                }
+                for c in uow.repo.children_of(node_id)
+            ]
             return {
                 "id": node.id,
                 "label": node.label,
@@ -201,5 +210,5 @@ class ContentService:
                     {"id": n.id, "text": n.text, "date": n.created.isoformat()}
                     for n in notes
                 ],
-                "children": [],
+                "children": children,
             }
