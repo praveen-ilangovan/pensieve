@@ -187,7 +187,14 @@ decided later with real promoted data in front of us.
   implemented yet" + exit 1 (backend = its own layer; cascade/rename decisions deferred).
   `docs/cli.md` added; README + install.sh hints updated. Suite **55 green**, lint clean.
   *(Minor: `find` shows a promoted entity as both thread + entity — dedup later.)*
-- **Chunk 5 — live verify (user-run)** — pending. `./install.sh` (new skill) → restart
+- **Chunk 5 — live verify** — ✅ PASSED → **Slice 5b COMPLETE.** Installed (new skill +
+  `0004`), captured real messy input (email thread + WhatsApp + asides) via the live agent.
+  Verified in `~/.pensieve`: entity recognition with **no duplication** across 6 captures
+  ("Rafia"/"Rafia Naseem"/"she" → one `rafia-naseem`), correct kinds (`person` + `the-
+  reader-life` **org**, with a `thereaderlife.com` alias), **no over-tagging**, provenance
+  `actor=claude-code`. Threshold crossed → agent **proposed** (not auto) → approved →
+  **promoted**: `rafia-naseem` is now a thread under `recs` (`node_id` linked, **6 notes
+  attached**), and `show recs` lists it. The make-or-break (resolution) held on real data. `./install.sh` (new skill) → restart
   Claude → clear `~/.pensieve` → re-capture the Rafia/Travis material → watch entities form
   (no dupes), Rafia cross the threshold, get proposed + promoted to a thread; `pensieve
   entities` / `entity rafia-naseem` to eyeball.
