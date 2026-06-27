@@ -88,6 +88,7 @@ class InMemoryRepository:
         self._state.attachments = {
             a for a in self._state.attachments if a[0] != note_id
         }
+        self._state.tags = {t for t in self._state.tags if t[0] != note_id}
 
     def notes_for(self, node_id: str) -> list[Note]:
         ids = [nid for (nid, target) in self._state.attachments if target == node_id]

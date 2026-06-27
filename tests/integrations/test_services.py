@@ -78,6 +78,21 @@ class TestContentServiceIntegration:
         content.delete_note(note.id)
         assert ContentService(SqliteUnitOfWork).get_stream_view("recs")["notes"] == []
 
+    def test_delete_tagged_note_no_fk_error(self, integration_store: Path):
+        # deleting a tagged note must not trip the tags FK (real SQLite, foreign_keys=ON)
+        StreamService(SqliteUnitOfWork).create_stream("Recs")
+        content = ContentService(SqliteUnitOfWork)
+        note = content.add_note(
+            "recs", "met rafia", entities=[{"name": "Rafia", "kind": "person"}]
+        )
+        content.delete_note(note.id)  # would raise IntegrityError if tags weren't cleaned
+
+        rafia = next(
+            e for e in EntityService(SqliteUnitOfWork).list_entities()
+            if e["id"] == "rafia"
+        )
+        assert rafia["count"] == 0
+
     def test_errors(self, integration_store: Path):
         content = ContentService(SqliteUnitOfWork)
         with pytest.raises(NodeNotFound):

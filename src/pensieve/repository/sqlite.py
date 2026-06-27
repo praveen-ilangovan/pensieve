@@ -56,6 +56,8 @@ class SqliteRepository:
             select(Attachment).where(Attachment.note_id == note_id)
         ):
             self._session.delete(att)
+        for tag in self._session.exec(select(Tag).where(Tag.note_id == note_id)):
+            self._session.delete(tag)
         note = self._session.get(Note, note_id)
         if note is not None:
             self._session.delete(note)

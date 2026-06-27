@@ -81,6 +81,17 @@ def test_delete_missing_note_raises(services):
         services.content.delete_note("note-99")
 
 
+def test_delete_tagged_note_cleans_up_tags(services):
+    services.streams.create_stream("Recs")
+    n = services.content.add_note(
+        "recs", "x", entities=[{"name": "Rafia", "kind": "person"}]
+    )
+    services.content.delete_note(n.id)
+    with services.uow() as uow:
+        assert uow.repo.tags_for_note(n.id) == []
+        assert uow.repo.count_for_entity("rafia") == 0
+
+
 def test_get_stream_view_shape(services):
     services.streams.create_stream("Recs", "Build Recs")
     services.content.add_note("recs", "first")
