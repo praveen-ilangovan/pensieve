@@ -61,3 +61,8 @@ entity-rm-then-stream-rm-then-restore, note-rm-then-stream-rm-then-restore.
 - Suite **78 green**; evals **19/19 + 36/36**; lint/types clean.
 - Not done (deferred to "later" per the review): de-dupe `_utcnow`, README note on the two
   MCP registrations, single-writer doc note (superseded by the atomic fix).
+- **Re-review: APPROVED, ok to push** (same architect agent, re-read commit `adca1af`, ran 7
+  adversarial removal/restore orderings — no inconsistency, no stranding, self-heals both
+  orders). Two non-blocking carries: (a) conformance test doesn't yet exercise `untag_note`
+  or `promotable=True` — add to the scenario later; (b) the `restore_entity` over-revive
+  invariant — noted in `roadmap.md` under assets.

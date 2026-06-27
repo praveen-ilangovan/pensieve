@@ -22,6 +22,11 @@ Open design questions to settle first:
   thread/stream-level?
 - How does it surface in `get_stream` / recall, and in the CLI/MCP?
 - Provenance/permanence: a moved/deleted file → dangling pointer; do we validate or just hold.
+- ⚠️ **Restore invariant to revisit (from the slice-6 review):** `restore_entity` currently
+  blanket-revives *all* of an entity's soft-unlinked tags, which is correct only because
+  `entity rm` is the *sole* producer of soft-unlinked tags today. If assets introduce a
+  second soft-unlink path, that blanket revive could over-restore — scope restore to the
+  owning operation (e.g. a deletion-batch key) when this lands.
 
 ### 3. `search_notes(query)` — retrieval over note *text*
 The #1 recall gap: "what did we decide about pricing" when no entity is named "pricing".
