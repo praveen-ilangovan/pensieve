@@ -37,7 +37,8 @@ class MemoryState:
     notes: dict[str, Note] = field(default_factory=dict)
     attachments: set[tuple[str, str]] = field(default_factory=set)  # (note_id, node_id)
     entities: dict[str, Entity] = field(default_factory=dict)
-    tags: set[tuple[str, str]] = field(default_factory=set)  # (note_id, entity_id)
+    # (note_id, entity_id) -> deleted_at (None = active link; a value = soft-unlinked)
+    tags: dict[tuple[str, str], object | None] = field(default_factory=dict)
     counters: dict[tuple[str, str], int] = field(default_factory=dict)
 
     def copy(self) -> MemoryState:
@@ -46,7 +47,7 @@ class MemoryState:
             notes=dict(self.notes),
             attachments=set(self.attachments),
             entities=dict(self.entities),
-            tags=set(self.tags),
+            tags=dict(self.tags),
             counters=dict(self.counters),
         )
 
@@ -137,7 +138,9 @@ class InMemoryRepository:
         self._state.attachments = {
             a for a in self._state.attachments if a[0] != note_id
         }
-        self._state.tags = {t for t in self._state.tags if t[0] != note_id}
+        self._state.tags = {
+            k: v for k, v in self._state.tags.items() if k[0] != note_id
+        }
 
     def notes_for(self, node_id: str) -> list[Note]:
         # the node is visible (caller navigated to it) → its non-deleted notes are live
@@ -182,24 +185,29 @@ class InMemoryRepository:
 
     # tags -----------------------------------------------------------------
     def tag_note(self, note_id: str, entity_id: str) -> None:
-        self._state.tags.add((note_id, entity_id))
+        self._state.tags[(note_id, entity_id)] = None  # (re)activate the link
 
     def untag_note(self, note_id: str, entity_id: str) -> None:
-        self._state.tags.discard((note_id, entity_id))
+        self._state.tags.pop((note_id, entity_id), None)  # hard remove (mis-tag fix)
+
+    def set_tags_deleted_for_entity(self, entity_id: str, when: object) -> None:
+        for key in list(self._state.tags):
+            if key[1] == entity_id:
+                self._state.tags[key] = when
 
     def tags_for_note(self, note_id: str) -> list[str]:
-        return [eid for (nid, eid) in self._state.tags if nid == note_id]
-
-    def note_ids_for_entity(self, entity_id: str) -> list[str]:
-        """All note ids tagged with the entity — raw (incl. deleted), for rm/restore."""
-        return [nid for (nid, eid) in self._state.tags if eid == entity_id]
+        return [
+            eid
+            for (nid, eid), deleted in self._state.tags.items()
+            if nid == note_id and deleted is None
+        ]
 
     def notes_for_entity(self, entity_id: str) -> list[Note]:
-        # live = note not deleted AND attached to a visible node
+        # live = active link AND note not deleted AND attached to a visible node
         ids = [
             nid
-            for (nid, eid) in self._state.tags
-            if eid == entity_id and self._note_live(nid)
+            for (nid, eid), deleted in self._state.tags.items()
+            if eid == entity_id and deleted is None and self._note_live(nid)
         ]
         notes = [self._state.notes[i] for i in ids if i in self._state.notes]
         return [_clone(n) for n in sorted(notes, key=lambda n: n.created)]
@@ -207,8 +215,8 @@ class InMemoryRepository:
     def count_for_entity(self, entity_id: str) -> int:
         return sum(
             1
-            for (nid, eid) in self._state.tags
-            if eid == entity_id and self._note_live(nid)
+            for (nid, eid), deleted in self._state.tags.items()
+            if eid == entity_id and deleted is None and self._note_live(nid)
         )
 
     def next_id(self, scope: str, kind: str, prefix: str) -> str:

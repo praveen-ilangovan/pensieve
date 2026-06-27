@@ -42,6 +42,7 @@ def test_fresh_store_migrates_to_head(integration_store: Path):
         "interface",
     } == _columns("notes")
     assert "deleted_at" in _columns("nodes")  # soft-delete (0005)
+    assert "deleted_at" in _columns("tags")  # soft-unlink (0006)
     assert _columns("attachments") == {"note_id", "node_id"}
     assert {"id", "name", "kind", "aliases", "node_id"} <= _columns("entities")
 

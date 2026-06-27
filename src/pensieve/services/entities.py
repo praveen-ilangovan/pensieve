@@ -174,32 +174,30 @@ class EntityService:
             return entity
 
     def delete_entity(self, entity_id: str) -> None:
-        """Remove an entity (and its thread, if promoted): **purge its notes** — soft-delete
-        every note tagged with it — and soft-delete its thread node. Any *other* entity left
-        with no live note vanishes too (derived, recursive). A genuinely entity-less note
-        elsewhere is untouched. Reversible via ``restore_entity``. Raises ``EntityNotFound``."""
+        """Remove an entity = **unlink it from every note** (notes own entities, not the
+        reverse — so a note is *never* deleted here): a note shared with another subject
+        survives under that subject; a note left with no subject becomes a plain note. The
+        entity then has no live link → it derives away; its thread node (if promoted) is
+        dropped. Reversible via ``restore_entity``. Raises ``EntityNotFound``."""
         with self._uow() as uow:
             entity = uow.repo.get_entity(
                 entity_id
             )  # raw — entities carry no deleted_at
             if entity is None:
                 raise EntityNotFound(f"No entity '{entity_id}'")
-            now = _utcnow()
-            for note_id in uow.repo.note_ids_for_entity(entity_id):
-                uow.repo.set_note_deleted(note_id, now)
+            uow.repo.set_tags_deleted_for_entity(entity_id, _utcnow())
             if entity.node_id is not None:
-                uow.repo.set_node_deleted(entity.node_id, now)
+                uow.repo.set_node_deleted(entity.node_id, _utcnow())
             uow.commit()
 
     def restore_entity(self, entity_id: str) -> None:
-        """Reverse ``delete_entity``: un-delete the entity's notes and its thread node.
-        Derived entities riding those notes reappear too. Raises ``EntityNotFound``."""
+        """Reverse ``delete_entity``: re-link the entity to its notes and bring back its
+        thread node. Raises ``EntityNotFound``."""
         with self._uow() as uow:
             entity = uow.repo.get_entity(entity_id)
             if entity is None:
                 raise EntityNotFound(f"No entity '{entity_id}'")
-            for note_id in uow.repo.note_ids_for_entity(entity_id):
-                uow.repo.set_note_deleted(note_id, None)
+            uow.repo.set_tags_deleted_for_entity(entity_id, None)
             if entity.node_id is not None:
                 uow.repo.set_node_deleted(entity.node_id, None)
             uow.commit()

@@ -134,6 +134,31 @@ class TestEntityServiceIntegration:
         assert rafia["count"] == 1
         assert rafia["promoted"] is False
 
+    def test_entity_rm_unlinks_round_trip(self, integration_store: Path):
+        StreamService(SqliteUnitOfWork).create_stream("Recs")
+        content = ContentService(SqliteUnitOfWork)
+        content.add_note(
+            "recs",
+            "rafia and travis",
+            entities=[
+                {"name": "Rafia", "kind": "person"},
+                {"name": "Travis", "kind": "person"},
+            ],
+        )
+
+        EntityService(SqliteUnitOfWork).delete_entity("rafia")
+        # rafia unlinked & derived-gone; travis keeps the shared note; note NOT deleted
+        assert [e["id"] for e in EntityService(SqliteUnitOfWork).list_entities()] == [
+            "travis"
+        ]
+        assert ContentService(SqliteUnitOfWork).get_stream_view("recs")["notes"]
+
+        EntityService(SqliteUnitOfWork).restore_entity("rafia")
+        assert {e["id"] for e in EntityService(SqliteUnitOfWork).list_entities()} == {
+            "rafia",
+            "travis",
+        }
+
     def test_promote_round_trip(self, integration_store: Path):
         StreamService(SqliteUnitOfWork).create_stream("Recs")
         content = ContentService(SqliteUnitOfWork)

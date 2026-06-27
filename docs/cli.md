@@ -39,8 +39,8 @@
 | `pensieve entity list` | the registry with counts + `★ promotable` / `✓ promoted` |
 | `pensieve entity promote <id> -s <stream>` | promote an entity into its own thread |
 | `pensieve entity edit <id> [--name] [--alias]` | rename / edit aliases (id stays stable) |
-| `pensieve entity rm <id>` | remove an entity + its thread (**soft**; purges its notes — notes/entities riding only those go too) |
-| `pensieve entity restore <id>` | bring back a removed entity (its notes + thread) |
+| `pensieve entity rm <id>` | remove an entity + its thread (**soft**; *unlinks* it from every note — notes are never deleted; a shared note survives under its other subject) |
+| `pensieve entity restore <id>` | bring back a removed entity (re-links its notes + thread) |
 
 ## Notes on the shape
 - **No `thread` namespace** — a thread is the same *type* as a stream (a node), just
@@ -49,9 +49,13 @@
 - **`show` is universal** — streams, threads, and entities are all "things you look at."
 - **Ids are stable slugs** (globally unique across nodes). A promoted entity's id *is*
   its thread node's id.
-- **`rm` is a soft-delete** — reversible with `restore`. Removal is **note-centric and
-  derived**: entities are alive iff they still have ≥1 *live* note (a live note is one
-  that isn't deleted and is still attached to a visible node). So removing a stream or an
-  entity ripples through to the entities that no longer have any reason to exist, while a
-  note shared with another stream — or a plain entity-less note — survives. A future
-  `forget` will hard-delete.
+- **`rm` is a soft-delete — and removal is bottom-up.** Notes are the atoms; streams
+  *contain* them, entities/threads merely *reference* them. So:
+  - **`stream rm`** lets go of the stream's notes (a note also homed in another stream
+    stays live there); entities then alive iff they still have ≥1 *live* note (not
+    deleted, still attached to a visible node) — pure ones derive away, cross-stream ones
+    survive.
+  - **`note rm`** hides one note; an entity that loses its last live note derives away.
+  - **`entity rm`** *unlinks*, it never deletes a note — a shared note survives under its
+    other subject; a note left subject-less becomes a plain note.
+  - Everything is reversible with `restore`; a future `forget` will hard-delete.

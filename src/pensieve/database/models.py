@@ -100,13 +100,15 @@ class Entity(SQLModel, table=True):
 
 
 class Tag(SQLModel, table=True):
-    """A note references an entity. Many-to-many. ``COUNT(tags)`` per entity is the
-    promotion counter (derived, not stored)."""
+    """A note references an entity (a *link*). Many-to-many. The count of **live** links
+    per entity is the promotion counter (derived, not stored). ``entity rm`` soft-deletes
+    these links (it unlinks — it never deletes a note); ``entity restore`` revives them."""
 
     __tablename__ = "tags"
 
     note_id: str = Field(foreign_key="notes.id", primary_key=True, index=True)
     entity_id: str = Field(foreign_key="entities.id", primary_key=True, index=True)
+    deleted_at: datetime | None = None  # soft-unlink (null = active link)
 
 
 class Counter(SQLModel, table=True):

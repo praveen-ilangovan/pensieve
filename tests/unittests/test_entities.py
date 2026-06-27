@@ -195,10 +195,10 @@ def test_get_entity_view(services):
         services.entities.get_entity_view("ghost")
 
 
-def test_delete_entity_purges_notes_and_derived_entities(services):
+def test_delete_entity_unlinks_keeps_notes_and_shared_subject(services):
     services.streams.create_stream("Recs")
     n_plain = services.content.add_note("recs", "plain note")  # no entities
-    services.content.add_note(
+    n_shared = services.content.add_note(
         "recs",
         "rafia and travis",
         entities=[
@@ -209,11 +209,11 @@ def test_delete_entity_purges_notes_and_derived_entities(services):
 
     services.entities.delete_entity("rafia")
 
-    # the shared note is purged → travis (riding only it) is derived-gone too
-    assert services.entities.list_entities() == []
-    # the entity-less stream note survives
+    # rafia unlinked & derived-gone; travis survives via the shared note
+    assert [e["id"] for e in services.entities.list_entities()] == ["travis"]
+    # NO note is deleted — both notes still in the stream
     recs = services.content.get_stream_view("recs")
-    assert [n["id"] for n in recs["notes"]] == [n_plain.id]
+    assert {n["id"] for n in recs["notes"]} == {n_plain.id, n_shared.id}
 
     with pytest.raises(EntityNotFound):
         services.entities.delete_entity("ghost")
@@ -223,27 +223,57 @@ def test_delete_entity_with_thread_then_restore(services):
     services.streams.create_stream("Recs")
     services.content.add_note(
         "recs", "met rafia", entities=[{"name": "Rafia", "kind": "person"}]
-    )
+    )  # sole-rafia note
     services.content.add_note(
         "recs",
         "rafia and travis",
-        entities=[
-            {"id": "rafia"},
-            {"name": "Travis", "kind": "person"},
-        ],
-    )
+        entities=[{"id": "rafia"}, {"name": "Travis", "kind": "person"}],
+    )  # shared note
     services.entities.promote_entity("rafia", "recs")
 
     services.entities.delete_entity("rafia")
-    assert services.streams.get_stream("rafia") is None  # thread node gone
-    assert services.entities.list_entities() == []  # travis rode only purged notes
+    assert services.streams.get_stream("rafia") is None  # thread node dropped
+    # rafia unlinked → gone; travis survives via the shared note; no note deleted
+    assert [e["id"] for e in services.entities.list_entities()] == ["travis"]
+    assert len(services.content.get_stream_view("recs")["notes"]) == 2
 
     services.entities.restore_entity("rafia")
     assert services.streams.get_stream("rafia") is not None  # thread back
     assert {e["id"] for e in services.entities.list_entities()} == {"rafia", "travis"}
+    assert services.entities.get_entity_view("rafia")["count"] == 2  # re-linked to both
 
     with pytest.raises(EntityNotFound):
         services.entities.restore_entity("ghost")
+
+
+def test_retag_revives_soft_unlinked_link(services):
+    services.streams.create_stream("Recs")
+    n = services.content.add_note(
+        "recs", "met rafia", entities=[{"name": "Rafia", "kind": "person"}]
+    )
+    services.entities.delete_entity("rafia")  # soft-unlink
+    assert services.entities.list_entities() == []
+
+    # re-linking the SAME note revives the link (no duplicate), entity reappears
+    services.content.tag_note(n.id, [{"id": "rafia"}])
+    assert [e["id"] for e in services.entities.list_entities()] == ["rafia"]
+    with services.uow() as uow:
+        assert uow.repo.tags_for_note(n.id) == ["rafia"]
+        assert uow.repo.count_for_entity("rafia") == 1  # revived, not duplicated
+
+
+def test_entity_rm_then_recapture_relinks_via_new_note(services):
+    services.streams.create_stream("Recs")
+    services.content.add_note(
+        "recs", "met rafia", entities=[{"name": "Rafia", "kind": "person"}]
+    )
+    services.entities.delete_entity("rafia")
+    assert services.entities.list_entities() == []
+
+    # mentioning rafia on a NEW note brings the (derived) entity back, count from the new note
+    services.content.add_note("recs", "rafia again", entities=[{"id": "rafia"}])
+    rafia = next(e for e in services.entities.list_entities() if e["id"] == "rafia")
+    assert rafia["count"] == 1
 
 
 def test_removed_entity_recall_raises(services):

@@ -171,21 +171,21 @@ def test_stream_rm_restore_and_shared_note(integration_store: Path):
     assert runner.invoke(app, ["stream", "restore", "nope"]).exit_code == 1
 
 
-def test_entity_rm_purges_notes_and_derived_entities(integration_store: Path):
+def test_entity_rm_unlinks_and_keeps_notes(integration_store: Path):
     runner.invoke(app, ["stream", "create", "Recs"])
     runner.invoke(app, ["note", "add", "plain note", "-s", "recs"])  # note-1, no entity
     runner.invoke(app, ["note", "add", "rafia and travis", "-s", "recs"])  # note-2
     runner.invoke(app, ["entity", "link", "note-2", "Rafia", "-k", "person"])
     runner.invoke(app, ["entity", "link", "note-2", "Travis", "-k", "person"])
 
-    # rm rafia purges note-2 → travis (riding only that note) vanishes too; note-1 stays
+    # rm rafia UNLINKS her; the shared note stays (travis keeps it); no note is deleted
     assert runner.invoke(app, ["entity", "rm", "rafia"]).exit_code == 0
     out = runner.invoke(app, ["entity", "list"]).stdout
-    assert "rafia" not in out and "travis" not in out
+    assert "rafia" not in out and "travis" in out
     recs = runner.invoke(app, ["show", "recs"]).stdout
-    assert "plain note" in recs and "rafia and travis" not in recs
+    assert "plain note" in recs and "rafia and travis" in recs  # both notes survive
 
-    # restore rafia → its note (and travis) come back
+    # restore rafia → re-linked
     assert runner.invoke(app, ["entity", "restore", "rafia"]).exit_code == 0
     out = runner.invoke(app, ["entity", "list"]).stdout
     assert "rafia" in out and "travis" in out

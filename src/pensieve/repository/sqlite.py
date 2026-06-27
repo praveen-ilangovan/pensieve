@@ -150,32 +150,40 @@ class SqliteRepository:
     # tags -----------------------------------------------------------------
     def tag_note(self, note_id: str, entity_id: str) -> None:
         self._session.flush()  # ensure note + entity rows exist before the FK row
-        if self._session.get(Tag, (note_id, entity_id)) is None:
+        tag = self._session.get(Tag, (note_id, entity_id))
+        if tag is None:
             self._session.add(Tag(note_id=note_id, entity_id=entity_id))
+        elif tag.deleted_at is not None:  # revive a soft-unlinked link
+            tag.deleted_at = None
+            self._session.add(tag)
 
     def untag_note(self, note_id: str, entity_id: str) -> None:
         tag = self._session.get(Tag, (note_id, entity_id))
         if tag is not None:
             self._session.delete(tag)
 
+    def set_tags_deleted_for_entity(self, entity_id: str, when: object) -> None:
+        for tag in self._session.exec(select(Tag).where(Tag.entity_id == entity_id)):
+            tag.deleted_at = when  # type: ignore[assignment]
+            self._session.add(tag)
+
     def tags_for_note(self, note_id: str) -> list[str]:
-        statement = select(Tag.entity_id).where(Tag.note_id == note_id)
+        statement = (
+            select(Tag.entity_id)
+            .where(Tag.note_id == note_id)
+            .where(col(Tag.deleted_at).is_(None))
+        )
         return list(self._session.exec(statement))
 
-    def note_ids_for_entity(self, entity_id: str) -> list[str]:
-        """All note ids tagged with the entity — raw (incl. deleted), for rm/restore."""
-        return list(
-            self._session.exec(select(Tag.note_id).where(Tag.entity_id == entity_id))
-        )
-
     def notes_for_entity(self, entity_id: str) -> list[Note]:
-        # live = note not deleted AND attached to a visible node
+        # live = active link AND note not deleted AND attached to a visible node
         statement = (
             select(Note)
             .join(Tag, col(Tag.note_id) == col(Note.id))
             .join(Attachment, col(Attachment.note_id) == col(Note.id))
             .join(Node, col(Node.id) == col(Attachment.node_id))
             .where(Tag.entity_id == entity_id)
+            .where(col(Tag.deleted_at).is_(None))
             .where(col(Note.deleted_at).is_(None))
             .where(col(Node.deleted_at).is_(None))
             .distinct()
@@ -191,6 +199,7 @@ class SqliteRepository:
             .join(Attachment, col(Attachment.note_id) == col(Note.id))
             .join(Node, col(Node.id) == col(Attachment.node_id))
             .where(Tag.entity_id == entity_id)
+            .where(col(Tag.deleted_at).is_(None))
             .where(col(Note.deleted_at).is_(None))
             .where(col(Node.deleted_at).is_(None))
         )

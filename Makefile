@@ -45,8 +45,9 @@ migration: ## Autogenerate a migration: make migration m="add X" (review the res
 ##################
 ###### EVAL ######
 .PHONY: eval
-eval: ## Run the deterministic capture/fetch evaluator (throwaway store)
+eval: ## Run the deterministic evaluators (capture/fetch + removal; throwaway stores)
 	@poetry run python -m evals.capture_fetch
+	@poetry run python -m evals.removal
 
 ##################
 ######  CLI  #####

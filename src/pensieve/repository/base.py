@@ -79,23 +79,31 @@ class Repository(Protocol):
         """Fuzzy/substring match over canonical name + aliases (candidate shortlist)."""
         ...
 
-    # tags (note <-> entity, many-to-many)
-    def tag_note(self, note_id: str, entity_id: str) -> None: ...
-    def untag_note(self, note_id: str, entity_id: str) -> None: ...
-    def tags_for_note(self, note_id: str) -> list[str]:
-        """The entity ids a note references."""
+    # tags (note <-> entity links, many-to-many; soft-unlinkable)
+    def tag_note(self, note_id: str, entity_id: str) -> None:
+        """Link a note to an entity (reviving a soft-unlinked link if one exists)."""
         ...
 
-    def note_ids_for_entity(self, entity_id: str) -> list[str]:
-        """Every note id tagged with the entity — raw (incl. deleted), for rm/restore."""
+    def untag_note(self, note_id: str, entity_id: str) -> None:
+        """**Hard**-remove a link — for correcting a mis-tag (no restore needed)."""
+        ...
+
+    def set_tags_deleted_for_entity(self, entity_id: str, when: object) -> None:
+        """Soft-unlink (``when`` a datetime) or re-link (``when`` None) **every** link to
+        the entity — this is what ``entity rm`` / ``entity restore`` ride on. Notes are
+        never touched (a note owns its entities, not the reverse)."""
+        ...
+
+    def tags_for_note(self, note_id: str) -> list[str]:
+        """The entity ids a note **actively** links to (live links only)."""
         ...
 
     def notes_for_entity(self, entity_id: str) -> list[Note]:
-        """The **live** notes tagged with the entity, in chronological order."""
+        """The **live** notes actively linked to the entity, in chronological order."""
         ...
 
     def count_for_entity(self, entity_id: str) -> int:
-        """Count of **live** notes tagged with the entity (the promotion counter)."""
+        """Count of **live** notes actively linked to the entity (the promotion counter)."""
         ...
 
     def next_id(self, scope: str, kind: str, prefix: str) -> str:

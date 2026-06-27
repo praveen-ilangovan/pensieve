@@ -60,3 +60,17 @@ container) and **entities are derived — alive iff they still have ≥1 live no
   gone). Tests: unit (streams/entities/content soft-delete + cascade + cross-stream) +
   CLI round-trips; migration test asserts `deleted_at`. Suite **70 green**; eval **28/28**
   (added §9 soft-delete/restore). MCP rm/restore exposure still deferred.
+- **rm model corrected → bottom-up + `entity rm` = unlink — ✅ done.** The relationship
+  is *note owns entity* (a note can exist subject-less; an entity can't exist without a
+  note). So removal is **bottom-up**: containers (streams) own notes; entities/threads
+  only *reference* them. `stream rm` / `note rm` already did this. Fixed `entity rm` from
+  "purge its notes" (which destroyed a note shared with another subject) to **unlink from
+  every note** — a note is never deleted; a shared note survives under its other subject;
+  the entity (and its thread) derives away. Reversible: added `deleted_at` on the **tag**
+  link (migration `0006`), `tag_note` revives a soft-unlinked link, `entity rm/restore`
+  ride `set_tags_deleted_for_entity`; `tags_for_note`/`notes_for_entity`/`count_for_entity`
+  count only live links. Dropped `note_ids_for_entity`. Memory adapter `tags` is now a
+  dict `(note,entity)->deleted_at`. New **`evals/removal.py`** (30 checks, scenarios A–E:
+  stream rm cross-stream survival, entity rm unlink keeps shared note, the cascade to
+  derived-vanish, promoted-entity rm). `make eval` runs both evals. Suite **73 green**;
+  capture/fetch + removal evals green.
