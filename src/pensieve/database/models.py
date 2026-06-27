@@ -1,10 +1,11 @@
 """
 models.py
 
-SQLModel table models — the physical realization of the Pensieve property graph
-(see docs/glossary.md). One generic ``nodes`` table + ``edges`` + per-node contents
-(``todos``, ``notes``) + ``history``, plus id ``counters``. Kind-specific data lives
-in ``Node.properties`` (JSON), so a new node-kind needs no schema change.
+SQLModel table models — the physical realization of the Pensieve model
+(see docs/glossary.md). A generic ``nodes`` table (streams + threads) + ``edges``
+(deferred), standalone ``notes`` + a ``notes``↔``nodes`` ``attachments`` table
+(notes are multi-homed), plus id ``counters``. Kind-specific data lives in
+``Node.properties`` (JSON), so a new node-kind needs no schema change.
 """
 
 from __future__ import annotations
@@ -52,49 +53,34 @@ class Edge(SQLModel, table=True):
     )  # located-in | requested-by | about | relates-to | ...
 
 
-class Todo(SQLModel, table=True):
-    """A todo — the mutable working set (open items only; completed are deleted)."""
-
-    __tablename__ = "todos"
-
-    node_id: str = Field(foreign_key="nodes.id", primary_key=True)
-    id: str = Field(primary_key=True)  # todo-<n>
-    text: str
-
-
 class Note(SQLModel, table=True):
-    """A note — the append-only log. ``flavor`` optional; ``supersedes`` links a reversal."""
+    """An atomic piece of information (global id). Append-only by default; edited only to
+    fix a genuine mistake. Multi-homed via the ``attachments`` table. Provenance
+    (``actor``/``interface``) lives here — there is no separate commit log."""
 
     __tablename__ = "notes"
 
-    node_id: str = Field(foreign_key="nodes.id", primary_key=True)
-    id: str = Field(primary_key=True)  # note-<n>
+    id: str = Field(primary_key=True)  # global: note-<n>
     text: str
-    flavor: str | None = None  # decision | outcome | observation
-    supersedes: str | None = None
-    date: datetime = Field(default_factory=_utcnow)
-    commit_id: str
-
-
-class History(SQLModel, table=True):
-    """Per-node commit log (provenance)."""
-
-    __tablename__ = "history"
-
-    node_id: str = Field(foreign_key="nodes.id", primary_key=True)
-    commit_id: str = Field(primary_key=True)  # c<n>
-    version: int
-    session: str | None = None
-    # commit provenance (agent-agnostic): who made the change, and how.
+    created: datetime = Field(default_factory=_utcnow)
+    updated: datetime = Field(default_factory=_utcnow)
+    # provenance (agent-agnostic): who last wrote it, and how.
     actor: str | None = None  # "cli" | "claude-code" | …
     interface: str | None = None  # "cli" | "mcp"
-    date: datetime = Field(default_factory=_utcnow)
-    summary: str | None = None
-    changes: list[Any] = Field(default_factory=list, sa_column=Column(JSON))
+
+
+class Attachment(SQLModel, table=True):
+    """A note attached to a node (stream/thread). Many-to-many — a note can be
+    multi-homed (the same note under several threads/streams)."""
+
+    __tablename__ = "attachments"
+
+    note_id: str = Field(foreign_key="notes.id", primary_key=True, index=True)
+    node_id: str = Field(foreign_key="nodes.id", primary_key=True, index=True)
 
 
 class Counter(SQLModel, table=True):
-    """Non-reusing id counters (scope = node_id or '_commit'; kind = note|todo|commit)."""
+    """Non-reusing id counters (scope ``_note`` for global note ids; kind ``note``)."""
 
     __tablename__ = "counters"
 

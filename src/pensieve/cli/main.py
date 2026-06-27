@@ -2,28 +2,26 @@
 cli/main.py
 
 Pensieve CLI entry point — the engine's **op** surface (init / create / ls / add /
-show). The judgment-bearing flows (capture / fetch) live in the agent skill, not here
-(see docs/verbs.md §0a).
+show / edit / rm). The judgment-bearing flows (capture / fetch) live in the agent skill,
+not here (see docs/verbs.md §0a).
 """
 
 from __future__ import annotations
-
-from enum import Enum
 
 import typer
 
 from ..config import get_settings
 from ..database.session import init_db
-from ..errors import NodeNotFound, PensieveError, StreamExists
+from ..errors import NodeNotFound, NoteNotFound, StreamExists
 from ..factory import content_service, stream_service
 
 app = typer.Typer(
     name="pensieve",
     help=(
         "Pensieve — manually-triggered, multi-stream agent memory.\n\n"
-        "A stream is a top-level domain (recs, employment, …); notes are captured "
-        "onto it. These commands are the mechanical op surface — the judgment-bearing "
-        "capture/fetch flows live in the agent skill."
+        "A stream is a top-level domain (recs, employment, …); notes hold information "
+        "and attach to it. These commands are the mechanical op surface — the "
+        "judgment-bearing capture/fetch flows live in the agent skill."
     ),
     epilog=(
         "Typical flow: **create** a stream → **add** notes to it → **show** it. "
@@ -32,14 +30,6 @@ app = typer.Typer(
     no_args_is_help=True,
     rich_markup_mode="markdown",
 )
-
-
-class Flavor(str, Enum):
-    """Optional classification of a note (mirrors content.VALID_FLAVORS)."""
-
-    decision = "decision"
-    outcome = "outcome"
-    observation = "observation"
 
 
 @app.command()
@@ -90,30 +80,18 @@ def add(
     stream: str = typer.Option(
         ..., "--stream", "-s", help="Id of the stream to add to (see 'pensieve ls')."
     ),
-    flavor: Flavor | None = typer.Option(
-        None, "--flavor", "-f", help="Optional: classify the note."
-    ),
 ) -> None:
     """Add a note to a stream.
 
-    You supply the structure (which stream, the text). This is the mechanical
+    Records a piece of information and attaches it to the stream. This is the mechanical
     `add_note` op; the agent's `capture` flow is what does this with judgment.
 
-    Example: pensieve add "talking to 4 curators" -s recs -f outcome
+    Example: pensieve add "talking to 4 curators" -s recs
     """
     try:
-        note = content_service().add_note(
-            stream,
-            text,
-            flavor=flavor.value if flavor else None,
-            actor="cli",
-            interface="cli",
-        )
+        note = content_service().add_note(stream, text, actor="cli", interface="cli")
     except NodeNotFound as exc:
         typer.echo(f"✗ No stream '{stream}'", err=True)
-        raise typer.Exit(code=1) from exc
-    except PensieveError as exc:
-        typer.echo(f"✗ {exc}", err=True)
         raise typer.Exit(code=1) from exc
     typer.echo(f"✓ added {note.id} to '{stream}'")
 
@@ -141,9 +119,43 @@ def show(
         typer.echo("  (empty)")
         return
     for note in notes:
-        flavor = f"[{note['flavor']}] " if note["flavor"] else ""
         date = note["date"][:10]  # YYYY-MM-DD
-        typer.echo(f"  {note['id']}  {flavor}{note['text']}  ({date})")
+        typer.echo(f"  {note['id']}  {note['text']}  ({date})")
+
+
+@app.command()
+def edit(
+    note: str = typer.Argument(..., help="Note id (e.g. note-3)."),
+    text: str = typer.Argument(..., help="The corrected text (replaces the note)."),
+) -> None:
+    """Rewrite a note's text — for fixing a genuine mistake.
+
+    A change in the world is a *new* note (`add`), not an edit.
+
+    Example: pensieve edit note-3 "corrected text"
+    """
+    try:
+        content_service().update_note(note, text, actor="cli", interface="cli")
+    except NoteNotFound as exc:
+        typer.echo(f"✗ No note '{note}'", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"✓ updated {note}")
+
+
+@app.command("rm")
+def rm(
+    note: str = typer.Argument(..., help="Note id to remove (e.g. note-3)."),
+) -> None:
+    """Delete a note (truly removes it).
+
+    Example: pensieve rm note-3
+    """
+    try:
+        content_service().delete_note(note)
+    except NoteNotFound as exc:
+        typer.echo(f"✗ No note '{note}'", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"✓ deleted {note}")
 
 
 def main() -> None:

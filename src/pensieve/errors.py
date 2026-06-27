@@ -18,3 +18,7 @@ class StreamExists(PensieveError):
 
 class NodeNotFound(PensieveError):
     """No node exists with the given id."""
+
+
+class NoteNotFound(PensieveError):
+    """No note exists with the given id."""

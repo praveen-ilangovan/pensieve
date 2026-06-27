@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from mcp.server.fastmcp import Context, FastMCP
 
-from .errors import NodeNotFound
+from .errors import NodeNotFound, NoteNotFound
 from .factory import content_service, stream_service
 
 mcp = FastMCP("pensieve")
@@ -59,25 +59,57 @@ def create_stream(name: str, purpose: str = "") -> dict[str, str]:
 
 
 @mcp.tool()
-def add_note(stream: str, text: str, ctx: Context, flavor: str | None = None) -> dict:
-    """Add a note to a stream.
+def add_note(stream: str, text: str, ctx: Context) -> dict:
+    """Add a note (a piece of information) to a stream.
 
     This is the mechanical commit step. Do the judgment first — decide *which* stream
-    this belongs to (use `list_streams`), and get the user's OK — then call this. It
-    does not route or summarise for you.
+    this belongs to (use `list_streams`), and get the user's OK — then call this. A
+    change in the world is a *new* note; use `update_note` only to fix a mistake.
 
     Args:
         stream: Id of the target stream (from `list_streams`).
         text: The note text.
-        flavor: Optional classification — "decision" | "outcome" | "observation".
     """
     try:
         note = content_service().add_note(
-            stream, text, flavor=flavor, actor=_client_name(ctx), interface="mcp"
+            stream, text, actor=_client_name(ctx), interface="mcp"
         )
     except NodeNotFound as exc:
         raise ValueError(f"No stream '{stream}'") from exc
-    return {"id": note.id, "stream": stream, "commit": note.commit_id}
+    return {"id": note.id, "stream": stream}
+
+
+@mcp.tool()
+def update_note(note: str, text: str, ctx: Context) -> dict:
+    """Rewrite a note's text — only to fix a genuine mistake.
+
+    A change in the world is a *new* note (`add_note`), not an edit.
+
+    Args:
+        note: Id of the note to edit (e.g. "note-3").
+        text: The corrected text (replaces the note's text).
+    """
+    try:
+        updated = content_service().update_note(
+            note, text, actor=_client_name(ctx), interface="mcp"
+        )
+    except NoteNotFound as exc:
+        raise ValueError(f"No note '{note}'") from exc
+    return {"id": updated.id}
+
+
+@mcp.tool()
+def delete_note(note: str) -> dict:
+    """Delete a note (truly removes it).
+
+    Args:
+        note: Id of the note to remove (e.g. "note-3").
+    """
+    try:
+        content_service().delete_note(note)
+    except NoteNotFound as exc:
+        raise ValueError(f"No note '{note}'") from exc
+    return {"deleted": note}
 
 
 @mcp.tool()

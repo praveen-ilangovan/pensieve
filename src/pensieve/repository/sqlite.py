@@ -13,17 +13,18 @@ from types import TracebackType
 
 from sqlmodel import Session, col, select
 
-from ..database.models import Counter, History, Node, Note
+from ..database.models import Attachment, Counter, Node, Note
 from ..database.session import get_engine, init_db
 from .base import Repository
 
 
 class SqliteRepository:
-    """Graph primitives over a SQLModel `Session` (one open transaction)."""
+    """Storage primitives over a SQLModel `Session` (one open transaction)."""
 
     def __init__(self, session: Session) -> None:
         self._session = session
 
+    # nodes ----------------------------------------------------------------
     def get_node(self, node_id: str) -> Node | None:
         return self._session.get(Node, node_id)
 
@@ -39,15 +40,46 @@ class SqliteRepository:
         )
         return list(self._session.exec(statement))
 
+    # notes ----------------------------------------------------------------
     def add_note(self, note: Note) -> None:
         self._session.add(note)
 
+    def get_note(self, note_id: str) -> Note | None:
+        return self._session.get(Note, note_id)
+
+    def save_note(self, note: Note) -> None:
+        self._session.add(note)
+
+    def delete_note(self, note_id: str) -> None:
+        for att in self._session.exec(
+            select(Attachment).where(Attachment.note_id == note_id)
+        ):
+            self._session.delete(att)
+        note = self._session.get(Note, note_id)
+        if note is not None:
+            self._session.delete(note)
+
     def notes_for(self, node_id: str) -> list[Note]:
-        statement = select(Note).where(Note.node_id == node_id).order_by(col(Note.date))
+        statement = (
+            select(Note)
+            .join(Attachment, col(Attachment.note_id) == col(Note.id))
+            .where(Attachment.node_id == node_id)
+            .order_by(col(Note.created))
+        )
         return list(self._session.exec(statement))
 
-    def add_history(self, history: History) -> None:
-        self._session.add(history)
+    # attachments ----------------------------------------------------------
+    def attach(self, note_id: str, node_id: str) -> None:
+        # Models carry no ORM relationships (dumb data holders), so the unit-of-work
+        # won't order this row after the note/node it references — flush them first so
+        # the FK targets exist (covers add_note->attach and create-node->attach).
+        self._session.flush()
+        self._session.add(Attachment(note_id=note_id, node_id=node_id))
+
+    def detach(self, note_id: str, node_id: str) -> None:
+        att = self._session.get(Attachment, (note_id, node_id))
+        if att is not None:
+            self._session.delete(att)
 
     def next_id(self, scope: str, kind: str, prefix: str) -> str:
         counter = self._session.get(Counter, (scope, kind))

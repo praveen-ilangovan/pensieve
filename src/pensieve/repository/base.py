@@ -23,25 +23,37 @@ from typing import TYPE_CHECKING, Protocol, runtime_checkable
 if TYPE_CHECKING:
     from types import TracebackType
 
-    from ..database.models import History, Node, Note
+    from ..database.models import Node, Note
 
 
 @runtime_checkable
 class Repository(Protocol):
-    """Storage-agnostic graph primitives. Adapters implement; services consume."""
+    """Storage-agnostic primitives. Adapters implement; services consume."""
 
+    # nodes (streams / threads)
     def get_node(self, node_id: str) -> Node | None: ...
     def add_node(self, node: Node) -> None: ...
     def save_node(self, node: Node) -> None: ...
     def list_streams(self) -> list[Node]: ...
+
+    # notes (standalone; multi-homed via attachments)
     def add_note(self, note: Note) -> None: ...
-    def notes_for(self, node_id: str) -> list[Note]:
-        """A node's notes in chronological (insertion) order."""
+    def get_note(self, note_id: str) -> Note | None: ...
+    def save_note(self, note: Note) -> None: ...
+    def delete_note(self, note_id: str) -> None:
+        """Delete a note and all its attachments."""
         ...
 
-    def add_history(self, history: History) -> None: ...
+    def notes_for(self, node_id: str) -> list[Note]:
+        """The notes attached to a node, in chronological order."""
+        ...
+
+    # attachments (note <-> node, many-to-many)
+    def attach(self, note_id: str, node_id: str) -> None: ...
+    def detach(self, note_id: str, node_id: str) -> None: ...
+
     def next_id(self, scope: str, kind: str, prefix: str) -> str:
-        """Allocate the next non-reusing id (1-based), e.g. ``note-1``, ``c1``."""
+        """Allocate the next non-reusing id (1-based), e.g. ``note-1``."""
         ...
 
 

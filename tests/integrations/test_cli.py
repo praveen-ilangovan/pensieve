@@ -41,9 +41,7 @@ def test_add_and_show_round_trip(integration_store: Path):
     assert result.exit_code == 0
     assert "note-1" in result.stdout
 
-    result = runner.invoke(
-        app, ["add", "Rafia postponed call", "-s", "recs", "-f", "outcome"]
-    )
+    result = runner.invoke(app, ["add", "Rafia is one of them", "-s", "recs"])
     assert result.exit_code == 0
     assert "note-2" in result.stdout
 
@@ -51,8 +49,26 @@ def test_add_and_show_round_trip(integration_store: Path):
     assert result.exit_code == 0
     assert "Build Recs" in result.stdout
     assert "talking to 4 curators" in result.stdout
-    assert "outcome" in result.stdout
     assert "note-1" in result.stdout and "note-2" in result.stdout
+
+
+def test_edit_and_rm_round_trip(integration_store: Path):
+    assert runner.invoke(app, ["create", "--stream", "Recs"]).exit_code == 0
+    assert runner.invoke(app, ["add", "meeting Tuesday", "-s", "recs"]).exit_code == 0
+
+    assert runner.invoke(app, ["edit", "note-1", "meeting Wednesday"]).exit_code == 0
+    result = runner.invoke(app, ["show", "recs"])
+    assert "meeting Wednesday" in result.stdout
+    assert "Tuesday" not in result.stdout
+
+    assert runner.invoke(app, ["rm", "note-1"]).exit_code == 0
+    assert "(empty)" in runner.invoke(app, ["show", "recs"]).stdout
+
+
+def test_edit_missing_note_exits_nonzero(integration_store: Path):
+    result = runner.invoke(app, ["edit", "note-99", "x"])
+    assert result.exit_code == 1
+    assert "No note 'note-99'" in result.output
 
 
 def test_show_empty_stream(integration_store: Path):

@@ -105,4 +105,20 @@ the full test suite stay **green** (adapted to the new model). No new capability
 ## 6. Progress log
 > Updated as we build (resume anchor).
 
-- _not started_
+- **Chunks 1–6 — ✅ done** (the behavior-preserving remodel).
+  - **Model + migration:** `Note` standalone (global id + `created`/`updated`/`actor`/
+    `interface`); new `Attachment` (note↔node m:n); dropped `History`, `Todo`, and notes'
+    `flavor`/`supersedes`/`commit_id`. Migration `0003_remodel` (clean drop+recreate of
+    `notes`, since we clear-and-rebuild). Verified on fresh + upgrade-path + legacy stores.
+  - **Repository:** both adapters reworked — notes via attachments, `add/get/save/
+    delete_note`, `attach/detach`, global note-id allocation. **Gotcha fixed:** models
+    carry no ORM relationships, so the sqlite adapter `flush()`es before inserting an
+    attachment (else the FK row beats its note/node). In-memory adapter unaffected.
+  - **Services:** `add_note` (note + attach), `update_note` (fix a mistake), `delete_note`,
+    `get_stream_view` (via attachments; no flavor). Provenance on the note.
+  - **CLI:** dropped `--flavor`; added `edit` / `rm`. **MCP:** dropped flavor; added
+    `update_note` / `delete_note`; provenance now read from the note.
+  - **Evaluator + tests:** updated to the new model (global ids, update/delete, multi-home
+    test). **Suite 36 green, evaluator 9/9, ruff + mypy clean.**
+- **Chunk 7 — pending:** clear & rebuild `~/.pensieve` + live re-verify (user-run).
+  ⚠️ `0003` **resets notes** — existing recs notes get wiped (by design; re-capture).

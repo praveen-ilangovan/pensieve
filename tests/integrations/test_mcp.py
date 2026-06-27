@@ -50,7 +50,14 @@ async def _roundtrip(store: Path) -> tuple[set[str], object, object, str]:
 def test_mcp_stdio_roundtrip(integration_store: Path):
     tools, added, fetched, listed = asyncio.run(_roundtrip(integration_store))
 
-    assert {"create_stream", "list_streams", "add_note", "get_stream"} <= tools
+    assert {
+        "create_stream",
+        "list_streams",
+        "add_note",
+        "update_note",
+        "delete_note",
+        "get_stream",
+    } <= tools
     assert added.isError is False
     assert "recs" in listed
     assert "talking to 4 curators" in str(fetched)
@@ -59,16 +66,35 @@ def test_mcp_stdio_roundtrip(integration_store: Path):
 def test_mcp_records_client_as_actor(integration_store: Path):
     asyncio.run(_roundtrip(integration_store))
 
-    # read provenance back from the same store
+    # provenance now lives on the note (no separate commit log)
     from sqlmodel import select
 
-    from pensieve.database.models import History
+    from pensieve.database.models import Note
     from pensieve.database.session import get_session
 
     with get_session() as session:
-        rows = list(session.exec(select(History)))
+        rows = list(session.exec(select(Note)))
 
     assert any(r.actor == CLIENT_NAME and r.interface == "mcp" for r in rows)
+
+
+async def _edit_delete(store: Path) -> tuple[object, object, str]:
+    async with _client(store) as session:
+        await session.call_tool("create_stream", {"name": "Recs"})
+        await session.call_tool("add_note", {"stream": "recs", "text": "Tuesday"})
+        edited = await session.call_tool(
+            "update_note", {"note": "note-1", "text": "Wednesday"}
+        )
+        deleted = await session.call_tool("delete_note", {"note": "note-1"})
+        fetched = await session.call_tool("get_stream", {"stream": "recs"})
+        return edited, deleted, str(fetched)
+
+
+def test_mcp_update_and_delete(integration_store: Path):
+    edited, deleted, fetched = asyncio.run(_edit_delete(integration_store))
+    assert edited.isError is False
+    assert deleted.isError is False
+    assert "Wednesday" not in fetched and "Tuesday" not in fetched  # note removed
 
 
 async def _fetch_missing(store: Path) -> object:

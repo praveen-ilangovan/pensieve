@@ -74,37 +74,48 @@ def run_checks() -> Checks:
         ["employment", "recs"],
     )
 
-    # 3. Case A — content fits NO existing stream -> it becomes a new stream.
-    #    (scripted agent: nothing matched, so create then add)
+    # 3. the three capture outcomes (scripted agent makes the target choice)
     streams.create_stream("Writing", "The 'I used to think' essays")
-    a = content.add_note("writing", "drafted the first essay outline", actor="eval")
-    checks.eq("A (new stream): note id", a.id, "note-1")
+    a = content.add_note(
+        "writing", "drafted the first essay outline", actor="eval"
+    )  # new
+    b = content.add_note(
+        "recs", "we are talking to 4 curators", actor="eval"
+    )  # existing
+    c = content.add_note(
+        "employment", "I am working for Nothing", actor="eval"
+    )  # explicit
+    d = content.add_note("recs", "rafia is one of the curators", actor="eval")
 
-    # 4. Case B — content routes to an EXISTING stream.
-    b = content.add_note("recs", "we are talking to 4 curators", actor="eval")
-    checks.eq("B (existing stream): note id", b.id, "note-1")
-
-    # 5. Case C — explicit target stream.
-    c = content.add_note("employment", "I am working for Nothing", actor="eval")
-    checks.eq("C (explicit stream): note id", c.id, "note-1")
-
-    # a second note on recs — exercises per-node note ids + ordering
-    content.add_note("recs", "rafia is one of the curators", actor="eval")
-
-    # note ids are per-node; commit ids are global + non-reusing
+    # note ids are GLOBAL + non-reusing now (not per-node)
     checks.eq(
-        "global commit ids",
-        [a.commit_id, b.commit_id, c.commit_id],
-        ["c1", "c2", "c3"],
+        "global sequential note ids",
+        [a.id, b.id, c.id, d.id],
+        ["note-1", "note-2", "note-3", "note-4"],
     )
+    checks.eq("provenance recorded on the note", a.actor, "eval")
 
-    # 6. FETCH through a *fresh* service — the cross-session round-trip.
+    # 4. FETCH through a *fresh* service — the cross-session round-trip.
     view = content_service().get_stream_view("recs")
     checks.eq("fetch: purpose round-trips", view["purpose"], "Build and grow Recs")
     checks.eq(
         "fetch: notes round-trip in order",
         [n["text"] for n in view["notes"]],
         ["we are talking to 4 curators", "rafia is one of the curators"],
+    )
+
+    # 5. update (fix a mistake) rewrites in place; delete removes.
+    content.update_note(d.id, "Rafia and Travis are curators", actor="eval")
+    checks.eq(
+        "update rewrites in place",
+        [n["text"] for n in content_service().get_stream_view("recs")["notes"]],
+        ["we are talking to 4 curators", "Rafia and Travis are curators"],
+    )
+    content.delete_note(b.id)
+    checks.eq(
+        "delete removes the note",
+        [n["text"] for n in content_service().get_stream_view("recs")["notes"]],
+        ["Rafia and Travis are curators"],
     )
 
     # fetching a missing stream raises (engine vocabulary; CLI/MCP translate it)

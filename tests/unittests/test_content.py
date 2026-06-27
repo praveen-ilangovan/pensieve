@@ -1,38 +1,37 @@
-"""Unit tests for ContentService — notes + id allocation (in-memory adapter)."""
+"""Unit tests for ContentService — notes, attachments, provenance (in-memory adapter)."""
 
 import pytest
 
-from pensieve.errors import NodeNotFound, PensieveError
-from pensieve.repository.memory import InMemoryUnitOfWork, MemoryState
-from pensieve.services.streams import StreamService
+from pensieve.errors import NodeNotFound, NoteNotFound
+from pensieve.repository.memory import InMemoryUnitOfWork
 
 
-def test_add_note_allocates_ids_and_bumps_version(services):
-    services.streams.create_stream("Recs", "Build Recs")  # created at version 1
-
-    n1 = services.content.add_note("recs", "talking to 4 curators")
-    n2 = services.content.add_note("recs", "Rafia postponed call -> Tue")
-
-    assert (n1.id, n2.id) == ("note-1", "note-2")
-    assert (n1.commit_id, n2.commit_id) == ("c1", "c2")
-    assert n1.node_id == "recs"
-
-    node = next(n for n in services.streams.list_streams() if n.id == "recs")
-    assert node.version == 3  # 1 (create) -> 2 -> 3
-
-
-def test_commit_ids_global_note_ids_per_node(services):
-    services.streams.create_stream("Recs")
+def test_add_note_allocates_global_ids_and_attaches(services):
+    services.streams.create_stream("Recs", "Build Recs")
     services.streams.create_stream("Employment")
 
-    a = services.content.add_note("recs", "x")
-    b = services.content.add_note("employment", "y")
-    c = services.content.add_note("recs", "z")
+    a = services.content.add_note("recs", "talking to 4 curators")
+    b = services.content.add_note("employment", "I work at Nothing")
+    c = services.content.add_note("recs", "rafia is one of the curators")
 
-    # commit ids are global + non-reusing
-    assert [a.commit_id, b.commit_id, c.commit_id] == ["c1", "c2", "c3"]
-    # note ids restart per node
-    assert (a.id, b.id, c.id) == ("note-1", "note-1", "note-2")
+    # note ids are GLOBAL now (not per-node)
+    assert (a.id, b.id, c.id) == ("note-1", "note-2", "note-3")
+
+    # each note is attached to its stream
+    recs = services.content.get_stream_view("recs")
+    assert [n["id"] for n in recs["notes"]] == ["note-1", "note-3"]
+    emp = services.content.get_stream_view("employment")
+    assert [n["id"] for n in emp["notes"]] == ["note-2"]
+
+
+def test_provenance_recorded_on_the_note(services):
+    services.streams.create_stream("Recs")
+    note = services.content.add_note("recs", "hi", actor="cli", interface="cli")
+
+    stored = services.state.notes[note.id]
+    assert stored.actor == "cli"
+    assert stored.interface == "cli"
+    assert stored.created == stored.updated  # untouched since creation
 
 
 def test_add_note_missing_node_raises(services):
@@ -40,61 +39,52 @@ def test_add_note_missing_node_raises(services):
         services.content.add_note("nope", "x")
 
 
-def test_invalid_flavor_rejected(services):
+def test_update_note_rewrites_in_place(services):
     services.streams.create_stream("Recs")
-    with pytest.raises(PensieveError):
-        services.content.add_note("recs", "x", flavor="bogus")
+    note = services.content.add_note("recs", "meeting Tuesday")
 
-
-def test_flavor_and_supersedes_stored(services):
-    services.streams.create_stream("Recs")
-
-    n1 = services.content.add_note("recs", "ship feature A", flavor="decision")
-    n2 = services.content.add_note(
-        "recs", "actually B", flavor="decision", supersedes=n1.id
-    )
-
-    assert n1.flavor == "decision"
-    assert n2.supersedes == "note-1"
-
-
-def test_history_recorded_per_note(services):
-    services.streams.create_stream("Recs")
-    services.content.add_note("recs", "hello", session_id="sess-1")
-
-    history = [h for h in services.state.history if h.node_id == "recs"]
-    assert len(history) == 1
-    row = history[0]
-    assert row.commit_id == "c1"
-    assert row.version == 2
-    assert row.session == "sess-1"
-    assert row.changes == [{"op": "add_note", "note": "note-1"}]
-
-
-def test_get_stream_view_shape_and_order(services):
-    services.streams.create_stream("Recs", "Build Recs")
-    services.content.add_note("recs", "talking to 4 curators")
-    services.content.add_note("recs", "Rafia postponed call -> Tue", flavor="outcome")
+    services.content.update_note(note.id, "meeting Wednesday", actor="cli")
 
     view = services.content.get_stream_view("recs")
+    assert [n["text"] for n in view["notes"]] == ["meeting Wednesday"]
+    stored = services.state.notes[note.id]
+    assert stored.updated >= stored.created
 
+
+def test_update_missing_note_raises(services):
+    with pytest.raises(NoteNotFound):
+        services.content.update_note("note-99", "x")
+
+
+def test_delete_note_removes_it_and_its_attachment(services):
+    services.streams.create_stream("Recs")
+    note = services.content.add_note("recs", "oops wrong note")
+
+    services.content.delete_note(note.id)
+
+    assert services.content.get_stream_view("recs")["notes"] == []
+    assert note.id not in services.state.notes
+    assert all(a[0] != note.id for a in services.state.attachments)
+
+
+def test_delete_missing_note_raises(services):
+    with pytest.raises(NoteNotFound):
+        services.content.delete_note("note-99")
+
+
+def test_get_stream_view_shape(services):
+    services.streams.create_stream("Recs", "Build Recs")
+    services.content.add_note("recs", "first")
+    services.content.add_note("recs", "second")
+
+    view = services.content.get_stream_view("recs")
     assert view["id"] == "recs"
     assert view["label"] == "Recs"
     assert view["kind"] == "subject"
     assert view["purpose"] == "Build Recs"
-    assert view["version"] == 3
-    assert view["todos"] == [] and view["children"] == []
-
-    assert [n["id"] for n in view["notes"]] == ["note-1", "note-2"]
-    assert view["notes"][0]["text"] == "talking to 4 curators"
-    assert view["notes"][1]["flavor"] == "outcome"
-    assert view["notes"][0]["flavor"] is None
-
-
-def test_get_stream_view_empty_notes(services):
-    services.streams.create_stream("Recs")
-    view = services.content.get_stream_view("recs")
-    assert view["notes"] == []
+    assert view["children"] == []
+    assert [n["text"] for n in view["notes"]] == ["first", "second"]
+    assert "flavor" not in view["notes"][0]  # flavor is gone
 
 
 def test_get_stream_view_missing_node_raises(services):
@@ -102,26 +92,20 @@ def test_get_stream_view_missing_node_raises(services):
         services.content.get_stream_view("nope")
 
 
-def test_provenance_recorded_on_commit(services):
+def test_note_can_be_multi_homed(services):
+    """The core of the new model: one note attached to two nodes (used by promotion)."""
     services.streams.create_stream("Recs")
-    services.content.add_note("recs", "hi", actor="cli", interface="cli")
+    services.streams.create_stream("Writing")
+    note = services.content.add_note("recs", "shared across both")
 
-    row = services.state.history[-1]
-    assert row.actor == "cli"
-    assert row.interface == "cli"
+    # attach the same note to a second node (what promotion does)
+    with InMemoryUnitOfWork(services.state) as uow:
+        uow.repo.attach(note.id, "writing")
+        uow.commit()
 
-
-def test_uncommitted_work_does_not_persist():
-    """A transaction that mutates but never commits must not leak into the store."""
-    state = MemoryState()
-    streams = StreamService(lambda: InMemoryUnitOfWork(state))
-    streams.create_stream("Recs")
-
-    with InMemoryUnitOfWork(state) as uow:
-        node = uow.repo.get_node("recs")
-        assert node is not None
-        node.version = 999
-        uow.repo.save_node(node)
-        # no uow.commit()
-
-    assert streams.list_streams()[0].version == 1
+    assert [n["id"] for n in services.content.get_stream_view("recs")["notes"]] == [
+        note.id
+    ]
+    assert [n["id"] for n in services.content.get_stream_view("writing")["notes"]] == [
+        note.id
+    ]
