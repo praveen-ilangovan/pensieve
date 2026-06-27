@@ -28,9 +28,27 @@ from ..errors import (
 )
 from ..factory import content_service, entity_service, stream_service
 
+_HELP = """
+Pensieve — your manually-triggered, self-organising memory.
+
+**The idea:** keep everything in a few **streams** (top-level domains, e.g. `recs`,
+`health`). Drop **notes** into a stream; the people/orgs/topics they mention become
+**entities** on their own, and recurring ones grow into their own **threads**.
+
+**Start here**
+
+* `pensieve stream create Recs -p "Build Recs"` — make a stream
+* `pensieve stream list` — see your streams
+* `pensieve note add "met Rafia at the salon" -s recs` — add a note
+* `pensieve show recs` — look inside (its threads + loose notes)
+* `pensieve find rafia` — search streams, threads & entities
+
+Run `pensieve <command> --help` for a group's verbs (e.g. `pensieve note --help`).
+"""
+
 app = typer.Typer(
     name="pensieve",
-    help="Pensieve — manually-triggered, self-organising agent memory.",
+    help=_HELP,
     no_args_is_help=True,
     rich_markup_mode="markdown",
 )
