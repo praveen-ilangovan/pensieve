@@ -1,8 +1,8 @@
 # Slice 5d — edit + rm (soft-delete)
 
-> **Status:** planned · **Date:** 2026-06-27 · Wires the CLI stubs (`stream edit/rm`,
-> `entity edit/rm`) to real behaviour. Two halves: **edit** (easy) and **rm = soft-delete**
-> (rippunier).
+> **Status:** ✅ done (shipped & pushed, `87acb04`) · **Date:** 2026-06-27 · Wired the CLI
+> stubs (`stream edit/rm`, `entity edit/rm`) to real behaviour. Two halves: **edit** (easy)
+> and **rm = soft-delete** (corrected to bottom-up; `entity rm` = unlink). See progress log.
 
 ## edit (easy) — rename / repurpose; **id is immutable**
 - `stream edit <id> [--name] [-p purpose]` → update the node's label / `purpose` property.

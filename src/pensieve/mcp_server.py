@@ -5,9 +5,10 @@ MCP server exposing Pensieve's **ops** as tools for agents (Claude Code, etc.):
 
     agent  ->  MCP (this file)  ->  services  ->  SQLite
 
-These are mechanical ops (`list_streams`, `create_stream`, `add_note`, `get_stream`) —
-the judgment-bearing `capture`/`fetch` *flows* live in the agent's skill, which composes
-these tools (see docs/verbs.md §0a). Run with `pensieve-mcp` (or `make mcp`).
+These are mechanical ops at parity with the CLI — per noun: create/add, `edit_*`, `get_*`,
+and soft-reversible `remove_*` / `restore_*` (plus `tag_note`/`untag_note`,
+`promote_entity`). The judgment-bearing `capture`/`fetch` *flows* live in the agent's skill,
+which composes these tools (see docs/verbs.md §0a). Run with `pensieve-mcp` (or `make mcp`).
 """
 
 from __future__ import annotations
@@ -59,6 +60,60 @@ def create_stream(name: str, purpose: str = "") -> dict[str, str]:
 
 
 @mcp.tool()
+def edit_stream(
+    stream: str, name: str | None = None, purpose: str | None = None
+) -> dict[str, str]:
+    """Rename or repurpose a stream. The id (slug) is immutable — only display fields change.
+
+    Args:
+        stream: Id of the stream (from `list_streams`).
+        name: New display name (optional).
+        purpose: New enduring purpose (optional).
+    """
+    try:
+        node = stream_service().edit_stream(stream, name=name, purpose=purpose)
+    except NodeNotFound as exc:
+        raise ValueError(f"No stream '{stream}'") from exc
+    return {
+        "id": node.id,
+        "label": node.label,
+        "purpose": str(node.properties.get("purpose") or ""),
+    }
+
+
+@mcp.tool()
+def remove_stream(stream: str) -> dict:
+    """Remove a stream and its threads. **Soft and reversible** — bring it back with
+    `restore_stream`. Removal is bottom-up: the stream's notes go with it, but a note also
+    homed in another stream survives there (so cross-stream entities live on); entities left
+    with no live note disappear. Tell the user it's recoverable.
+
+    Args:
+        stream: Id of the stream to remove (from `list_streams`).
+    """
+    try:
+        stream_service().delete_stream(stream)
+    except NodeNotFound as exc:
+        raise ValueError(f"No stream '{stream}'") from exc
+    return {"removed": stream, "restore_with": "restore_stream"}
+
+
+@mcp.tool()
+def restore_stream(stream: str) -> dict:
+    """Bring back a removed stream and its threads (their notes relive; derived entities
+    reappear).
+
+    Args:
+        stream: Id of the stream to restore.
+    """
+    try:
+        stream_service().restore_stream(stream)
+    except NodeNotFound as exc:
+        raise ValueError(f"No stream '{stream}'") from exc
+    return {"restored": stream}
+
+
+@mcp.tool()
 def list_entities() -> list[dict]:
     """List the entity registry (people/orgs/topics notes refer to) with note counts.
 
@@ -106,7 +161,7 @@ def add_note(
 
 
 @mcp.tool()
-def update_note(note: str, text: str, ctx: Context) -> dict:
+def edit_note(note: str, text: str, ctx: Context) -> dict:
     """Rewrite a note's text — only to fix a genuine mistake.
 
     A change in the world is a *new* note (`add_note`), not an edit.
@@ -125,8 +180,9 @@ def update_note(note: str, text: str, ctx: Context) -> dict:
 
 
 @mcp.tool()
-def delete_note(note: str) -> dict:
-    """Delete a note (truly removes it).
+def remove_note(note: str) -> dict:
+    """Remove a note. **Soft and reversible** — bring it back with `restore_note`. An entity
+    that loses its last live note disappears (derived). Tell the user it's recoverable.
 
     Args:
         note: Id of the note to remove (e.g. "note-3").
@@ -135,7 +191,21 @@ def delete_note(note: str) -> dict:
         content_service().delete_note(note)
     except NoteNotFound as exc:
         raise ValueError(f"No note '{note}'") from exc
-    return {"deleted": note}
+    return {"removed": note, "restore_with": "restore_note"}
+
+
+@mcp.tool()
+def restore_note(note: str) -> dict:
+    """Bring back a removed note (its entities reappear if it was their last note).
+
+    Args:
+        note: Id of the note to restore (e.g. "note-3").
+    """
+    try:
+        content_service().restore_note(note)
+    except NoteNotFound as exc:
+        raise ValueError(f"No note '{note}'") from exc
+    return {"restored": note}
 
 
 @mcp.tool()
@@ -153,6 +223,27 @@ def untag_note(note: str, entity: str) -> dict:
     except NoteNotFound as exc:
         raise ValueError(f"No note '{note}'") from exc
     return {"note": note, "unlinked": entity}
+
+
+@mcp.tool()
+def tag_note(note: str, entities: list[dict]) -> dict:
+    """Link an existing note to the entities it references (resolving/creating each).
+
+    Use when you spot a subject in a note that wasn't tagged at capture time. Resolve
+    against the registry first (`list_entities`/`find_entities`) to avoid duplicates.
+
+    Args:
+        note: Id of the note to link (e.g. "note-3").
+        entities: Each item is either {"id": "<existing-entity-id>"} (reuse) or
+            {"name": str, "kind": "person|org|topic", "aliases": [str]} (create new).
+    """
+    try:
+        ids = content_service().tag_note(note, entities)
+    except NoteNotFound as exc:
+        raise ValueError(f"No note '{note}'") from exc
+    except EntityNotFound as exc:
+        raise ValueError(str(exc)) from exc
+    return {"note": note, "linked": ids}
 
 
 @mcp.tool()
@@ -189,6 +280,56 @@ def promote_entity(entity: str, stream: str) -> dict:
     except NodeNotFound as exc:
         raise ValueError(f"No stream '{stream}'") from exc
     return {"id": node.id, "label": node.label, "parent": stream}
+
+
+@mcp.tool()
+def edit_entity(
+    entity: str, name: str | None = None, aliases: list[str] | None = None
+) -> dict:
+    """Rename an entity or replace its aliases. The id is immutable; if it's promoted, its
+    thread label is kept in sync.
+
+    Args:
+        entity: Id of the entity (from `list_entities`).
+        name: New display name (optional).
+        aliases: New alias list — replaces the existing one (optional).
+    """
+    try:
+        ent = entity_service().edit_entity(entity, name=name, aliases=aliases)
+    except EntityNotFound as exc:
+        raise ValueError(f"No entity '{entity}'") from exc
+    return {"id": ent.id, "name": ent.name, "aliases": ent.aliases}
+
+
+@mcp.tool()
+def remove_entity(entity: str) -> dict:
+    """Remove an entity (and its thread, if promoted). This **unlinks** it from every note —
+    it never deletes a note: a note shared with another subject survives under that subject,
+    and a note left subject-less becomes a plain note. **Soft and reversible** via
+    `restore_entity`. Tell the user it's recoverable.
+
+    Args:
+        entity: Id of the entity to remove (from `list_entities`).
+    """
+    try:
+        entity_service().delete_entity(entity)
+    except EntityNotFound as exc:
+        raise ValueError(f"No entity '{entity}'") from exc
+    return {"removed": entity, "restore_with": "restore_entity"}
+
+
+@mcp.tool()
+def restore_entity(entity: str) -> dict:
+    """Bring back a removed entity — re-links it to its notes and restores its thread.
+
+    Args:
+        entity: Id of the entity to restore.
+    """
+    try:
+        entity_service().restore_entity(entity)
+    except EntityNotFound as exc:
+        raise ValueError(f"No entity '{entity}'") from exc
+    return {"restored": entity}
 
 
 @mcp.tool()

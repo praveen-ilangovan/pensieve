@@ -28,14 +28,22 @@ edit the store directly.
 
 ## Tools
 - `list_streams()` — the stream index (load before routing).
-- `create_stream(name, purpose)` — a new domain (deliberate; confirm first).
+- `create_stream(name, purpose)` / `edit_stream(stream, name?, purpose?)` — a new domain
+  (deliberate; confirm first) / rename or repurpose one (id is immutable).
 - `list_entities()` — the entity registry with note counts + `promotable` flag.
 - `find_entities(query)` — fuzzy search the registry (resolve a mention; recall).
 - `add_note(stream, text, entities=[…])` — record a note + tag the entities it mentions.
+- `tag_note(note, entities=[…])` / `untag_note(note, entity)` — link / unlink an entity on
+  an existing note (fix tagging).
+- `edit_note(note, text)` — fix a genuine mistake (a change in the world is a *new* note).
 - `get_stream(stream)` — a stream's (or thread's) view.
-- `get_entity(entity)` — everything about an entity (its notes), promoted or not.
+- `get_entity(entity)` / `edit_entity(entity, name?, aliases?)` — recall everything about an
+  entity / rename it.
 - `promote_entity(entity, stream)` — give a recurring entity its own thread.
-- `update_note(note, text)` / `delete_note(note)` — fix a mistake / truly remove.
+- **Remove / restore — all *soft & reversible* (tell the user so):**
+  `remove_stream` / `remove_note` / `remove_entity`, undone by
+  `restore_stream` / `restore_note` / `restore_entity`. `remove_entity` *unlinks* — it
+  never deletes a note.
 
 ## CAPTURE — "add this to pensieve"
 1. **Filter.** Keep **durable state** — decisions, status, who/what is in play,
@@ -61,9 +69,8 @@ edit the store directly.
 6. On approval → `add_note(stream, text, entities=[…])`.
 7. **Promotion check** (below). Then **confirm briefly** — what landed where.
 
-> A change in the world is a **new note**, not an edit. Use `update_note` only to fix a
-> genuine mistake; `delete_note` only to truly remove. (Memory keeps history — "the
-> meeting moved" is worth remembering.)
+> A change in the world is a **new note**, not an edit. Use `edit_note` only to fix a
+> genuine mistake. (Memory keeps history — "the meeting moved" is worth remembering.)
 
 ## PROMOTION — when something recurs
 After capture (or when the user focuses on someone), check `list_entities`. If an entity
@@ -79,6 +86,21 @@ thread, so next time "what about Rafia?" is instant. Never auto-promote; it's a 
   if long. Vague? `list_streams` and ask which.
 - **"what do I know about <someone/something>"** → `find_entities` to locate it, then
   `get_entity` for its notes (works whether or not it's a thread yet).
+
+## REMOVE / RESTORE — "remove <X>" / "delete that"
+Removal is **bottom-up** (notes are the atoms; streams *contain* them, entities/threads
+only *reference* them) and always **soft & reversible** — so act on the user's request, and
+tell them how to undo it.
+- **"remove <stream>"** → `remove_stream`. Its notes go with it, *but* a note shared with
+  another stream survives there; entities left with no live note disappear. Reversible with
+  `restore_stream`.
+- **"remove that note"** → `remove_note`. An entity that loses its last note disappears.
+  Reversible with `restore_note`.
+- **"stop tracking <person/topic>"** → `remove_entity` — this **unlinks** it everywhere; no
+  note is deleted (a shared note stays under its other subject). Reversible with
+  `restore_entity`.
+- Confirm only when the target is broad/ambiguous (a whole stream); a single note is cheap
+  and reversible. Always say it can be restored.
 
 ## Discipline
 - **Resolve before creating** — the cardinal rule; a duplicated entity fragments the
