@@ -164,5 +164,12 @@ decided later with real promoted data in front of us.
     via `find_entities`/`get_entity`. Vocabulary updated (streams/threads/notes + real
     names; never node/edge/attachment/tag). Also **fixed 5a staleness** — dropped the old
     `flavor` references.
-- **Chunk 5 — pending** (evaluator + live: re-capture clean, watch Rafia self-organise +
-  promote). Goes live after `./install.sh` (new skill).
+- **Chunk 5 — evaluator** — ✅ done. Extended `make eval` to the full self-organising loop:
+  resolution + **dedup** (one entity, no duplicate), count, **promotable** at threshold,
+  **promote** (thread under stream + notes attached), **recall** (`get_entity`), and a new
+  tagged note auto-landing under the promoted thread. **16/16 checks; suite 55 green.**
+  (Eval sets `PENSIEVE_PROMOTION_THRESHOLD=2` to reach promotion quickly.)
+- **Chunk 5 — live verify (user-run)** — pending. `./install.sh` (new skill) → restart
+  Claude → clear `~/.pensieve` → re-capture the Rafia/Travis material → watch entities form
+  (no dupes), Rafia cross the threshold, get proposed + promoted to a thread; `pensieve
+  entities` / `entity rafia-naseem` to eyeball.

@@ -118,6 +118,41 @@ def run_checks() -> Checks:
         ["Rafia and Travis are curators"],
     )
 
+    # 6. ENTITIES — resolution + dedup + count (the self-organising bit).
+    from pensieve.factory import entity_service
+
+    entities = entity_service()
+    content.add_note(
+        "recs", "Rafia emailed", entities=[{"name": "Rafia Naseem", "kind": "person"}]
+    )
+    content.add_note(
+        "recs", "Rafia called", entities=[{"name": "Rafia Naseem", "kind": "person"}]
+    )
+    reg = [e for e in entities.list_entities() if e["id"] == "rafia-naseem"]
+    checks.eq("entity resolved once (no duplicate)", len(reg), 1)
+    checks.eq("entity note count", reg[0]["count"] if reg else None, 2)
+    checks.eq("promotable at threshold", reg[0]["promotable"] if reg else None, True)
+
+    # 7. PROMOTION — thread under the stream + its notes attached.
+    node = entities.promote_entity("rafia-naseem", "recs")
+    checks.eq("promoted to a thread under the stream", node.parent_id, "recs")
+    view = entity_service().get_entity_view("rafia-naseem")
+    checks.eq("entity is now a thread", view["promoted"], True)
+    checks.eq(
+        "recall returns the entity's notes",
+        [n["text"] for n in view["notes"]],
+        ["Rafia emailed", "Rafia called"],
+    )
+
+    # a new note tagging the promoted entity lands under the thread automatically.
+    content.add_note("recs", "Rafia confirmed", entities=[{"id": "rafia-naseem"}])
+    thread = content_service().get_stream_view("rafia-naseem")
+    checks.eq(
+        "new tagged note lands under the thread",
+        "Rafia confirmed" in [n["text"] for n in thread["notes"]],
+        True,
+    )
+
     # fetching a missing stream raises (engine vocabulary; CLI/MCP translate it)
     checks.raises(
         "fetch missing stream raises NodeNotFound",
@@ -131,6 +166,7 @@ def run_checks() -> Checks:
 def main() -> int:
     store = tempfile.mkdtemp(prefix="pensieve-eval-")
     os.environ["PENSIEVE_HOME"] = store
+    os.environ["PENSIEVE_PROMOTION_THRESHOLD"] = "2"  # so the eval can reach it quickly
 
     from pensieve.database.session import reset_engines
 
