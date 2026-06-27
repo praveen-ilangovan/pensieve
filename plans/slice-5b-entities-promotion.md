@@ -155,4 +155,14 @@ decided later with real promoted data in front of us.
   - Tests: unit (promote + attach + errors + tag-promoted-attaches) + integration (sqlite
     round-trip, MCP, CLI). **Suite 54 green, lint clean.** Smoke (threshold=3): Rafia → ★
     promotable → promoted → thread shows her notes → `ls` still lists only the stream.
-- **Chunks 4–5 — pending** (skill; evaluator + live).
+- **Chunk 4 — skill (the brain) + recall primitive** — ✅ done.
+  - Added `get_entity` recall (entity + its notes, promoted or not): `EntityService.
+    get_entity_view`, MCP `get_entity`, CLI `pensieve entity <id>`. Suite **55 green**.
+  - Rewrote `adapters/claude/SKILL.md` for the four concepts: capture now **loads the
+    entity registry + resolves before creating** (the dup-avoidance cardinal rule),
+    tags via `add_note(entities=…)`, **proposes promotion** when `promotable`, and recalls
+    via `find_entities`/`get_entity`. Vocabulary updated (streams/threads/notes + real
+    names; never node/edge/attachment/tag). Also **fixed 5a staleness** — dropped the old
+    `flavor` references.
+- **Chunk 5 — pending** (evaluator + live: re-capture clean, watch Rafia self-organise +
+  promote). Goes live after `./install.sh` (new skill).

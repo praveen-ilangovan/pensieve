@@ -107,6 +107,20 @@ def test_tagging_promoted_entity_attaches_to_thread(services):
     assert n.id in {x["id"] for x in services.content.get_stream_view("rafia")["notes"]}
 
 
+def test_get_entity_view(services):
+    services.streams.create_stream("Recs")
+    services.content.add_note("recs", "a", entities=[{"name": "Rafia", "kind": "person"}])
+    services.content.add_note("recs", "b", entities=[{"id": "rafia"}])
+
+    view = services.entities.get_entity_view("rafia")
+    assert view["count"] == 2
+    assert view["promoted"] is False
+    assert [n["text"] for n in view["notes"]] == ["a", "b"]
+
+    with pytest.raises(EntityNotFound):
+        services.entities.get_entity_view("ghost")
+
+
 def test_notes_and_count_for_entity(services):
     services.streams.create_stream("Recs")
     services.entities.create_entity("Rafia", "person")

@@ -1,72 +1,86 @@
 ---
 name: pensieve
-description: The user's personal Pensieve memory — a persistent, multi-stream knowledge graph that survives across sessions. Use whenever the user mentions "pensieve", asks about "my streams" / "my memory" / "what have I saved", says "add this to pensieve" / "remember this" / "save this", or wants to recall/resume durable context. Reads and writes via the pensieve MCP tools.
+description: The user's personal Pensieve memory — a persistent, self-organising knowledge base that survives across sessions. Use whenever the user mentions "pensieve", asks about "my streams" / "my memory" / "what have I saved", says "add this to pensieve" / "remember this" / "save this", asks "what do I know about <someone/something>", or wants to recall/resume durable context. Reads and writes via the pensieve MCP tools.
 ---
 
 # Pensieve
 
-Pensieve is the user's **manually-triggered, multi-stream memory** — a personal
-knowledge graph of **streams** (top-level domains of their work/life, e.g. `recs`,
-`employment`, `writing`), each holding **notes**. It persists across sessions.
+Pensieve is the user's **manually-triggered memory** — an information lake that *groups
+itself*. Four things:
+
+- **stream** — a top-level domain (`recs`, `employment`).
+- **thread** — a focused sub-topic inside a stream (e.g. a person who recurs).
+- **note** — an atomic piece of information (the unit you capture).
+- **entity** — a named thing notes refer to (a person/org/topic). Notes get **tagged**
+  with the entities they mention; once an entity recurs enough, it can earn its own
+  **thread**.
 
 Operate it through the **`pensieve` MCP tools**. **You judge; the engine writes** — never
 edit the store directly.
 
-## When to reach for this skill
-- The user says "pensieve", "my streams", "my memory", "what have I saved".
-- **"add this to pensieve" / "remember this" / "save this"** → run **capture**.
-- **"what's in pensieve" / "what's in <stream>" / resuming** → run **fetch**.
-- The user wants to see or create a stream.
+## Vocabulary
+- Speak in **streams**, **threads**, **notes**, and the **real names** of things ("Rafia",
+  "the meeting"). Never expose storage mechanics — *node, edge, attachment, tag* (if a tool
+  error leaks "node", say "stream"/"thread").
+- **`capture`** / **`fetch`** are *your* flows (judgment). The MCP tools are mechanical
+  ops you compose; calling `add_note` isn't capturing — you route, resolve, and get the
+  user's OK *around* it.
 
-## Vocabulary (important)
-- Speak in **streams** and **notes** only. **Never** expose internal terms — *node*,
-  *edge*, *thread*. (If a tool error leaks "node", say "stream".)
-- **`capture`** and **`fetch`** are *your* flows (they take judgment). `add_note` /
-  `get_stream` are the engine *ops* you call. **Calling `add_note` is not capturing** —
-  you do the routing and get the user's OK *around* it.
-
-## Tools (the `pensieve` MCP server)
-- **`list_streams()`** — the index (`id`, `label`, `purpose`). Load this before routing.
-- **`create_stream(name, purpose)`** — a new top-level domain (deliberate; confirm first).
-- **`add_note(stream, text, flavor?)`** — append a note (the commit step).
-- **`get_stream(stream)`** — a stream's thin view (identity, purpose, notes).
+## Tools
+- `list_streams()` — the stream index (load before routing).
+- `create_stream(name, purpose)` — a new domain (deliberate; confirm first).
+- `list_entities()` — the entity registry with note counts + `promotable` flag.
+- `find_entities(query)` — fuzzy search the registry (resolve a mention; recall).
+- `add_note(stream, text, entities=[…])` — record a note + tag the entities it mentions.
+- `get_stream(stream)` — a stream's (or thread's) view.
+- `get_entity(entity)` — everything about an entity (its notes), promoted or not.
+- `promote_entity(entity, stream)` — give a recurring entity its own thread.
+- `update_note(note, text)` / `delete_note(note)` — fix a mistake / truly remove.
 
 ## CAPTURE — "add this to pensieve"
-The user points at something worth remembering; you structure and route it.
-
 1. **Filter.** Keep **durable state** — decisions, status, who/what is in play,
    commitments. Drop advice you just delivered, small talk, transient reasoning. (Most of
    a conversation is droppable; the residue is what changed.)
-2. **Load the index** — call `list_streams`.
-3. **Decide placement, propose once, get an OK:**
-   - fits an existing stream → propose that stream;
-   - fits none and looks **enduring** → propose a **new stream** (name + one-line
-     purpose); don't create thin, one-off streams;
-   - the user named a stream → use it (no need to ask which).
-4. **Tidy the text** so it stands alone, and **pin relative dates to absolute**
-   ("Tuesday" → the actual date).
-5. On approval → `add_note(stream, text[, flavor])`. `flavor` is optional:
-   `decision` | `outcome` | `observation`.
-6. **Confirm briefly** — what landed where.
+2. **Load context.** `list_streams` (routing) **and** `list_entities` (resolution).
+3. **Route** to a stream: an existing one if it fits; a **new stream** (name + one-line
+   purpose) only if it's a genuinely enduring new domain; or the stream the user named.
+4. **Resolve entities** in the note — the part that makes memory cohere:
+   - For each person/org/recurring topic mentioned, **match it to an existing entity** and
+     reuse its id; only create a new one if it's genuinely novel. **"Rafia", "Rafia
+     Naseem", "her" are the same entity** — use `find_entities` to check before creating,
+     so you never make duplicates.
+   - Pass them as `entities`: `{"id": "<existing>"}` to reuse, or
+     `{"name": "Travis King", "kind": "person", "aliases": [...]}` for a new one.
+   - **What to tag:** people, orgs, recurring topics/projects. **Not** dates, values, or
+     incidental nouns (those are the note's text). When unsure, don't tag — or ask.
+5. **Tidy** the text so it stands alone; **pin relative dates to absolute** ("Tuesday" →
+   the actual date).
+6. On approval → `add_note(stream, text, entities=[…])`.
+7. **Promotion check** (below). Then **confirm briefly** — what landed where.
 
-Everything is captured as a **note** for now. Don't try to split out people/sub-topics
-as separate entries — if something seems to deserve its own place, surface it as a
-question rather than guessing.
+> A change in the world is a **new note**, not an edit. Use `update_note` only to fix a
+> genuine mistake; `delete_note` only to truly remove. (Memory keeps history — "the
+> meeting moved" is worth remembering.)
 
-## FETCH — "what's in pensieve / in <stream>"
-1. Named a stream → `get_stream(it)`. Vague → `list_streams` and ask which (or show the
-   index).
-2. Render the thin view **tightly**: the purpose, then the notes (oldest → newest).
-   Don't dump everything — summarise if it's long.
+## PROMOTION — when something recurs
+After capture (or when the user focuses on someone), check `list_entities`. If an entity
+is **`promotable`** (it's crossed the threshold), **propose** it — don't do it silently:
+
+> "Rafia's come up across 5 notes now — want her own thread under `recs`?"
+
+On approval → `promote_entity(entity, stream)`. It gathers her notes under a dedicated
+thread, so next time "what about Rafia?" is instant. Never auto-promote; it's a proposal.
+
+## FETCH / RECALL
+- **"what's in <stream>"** → `get_stream`. Render tightly (purpose, then notes); summarise
+  if long. Vague? `list_streams` and ask which.
+- **"what do I know about <someone/something>"** → `find_entities` to locate it, then
+  `get_entity` for its notes (works whether or not it's a thread yet).
 
 ## Discipline
-- **Propose once; don't interrogate.** The approval is the safety net — keep friction low.
-- Streams are **deliberate and few-but-strong**; a stream's `purpose` is enduring and
-  rarely changes.
-- **Surface ambiguity, don't guess** — if placement or keep/drop is genuinely unclear,
-  ask.
-- Keep replies tight: the user wants their memory, not a lecture.
-
-> **First capture/fetch pass.** The fuller routing/keep rules (R1–R9) and the
-> counter-driven note→node promotion are coming (see the project's `verbs.md`). For now:
-> capture as notes, route to streams, and surface anything ambiguous.
+- **Resolve before creating** — the cardinal rule; a duplicated entity fragments the
+  memory.
+- **Propose once; don't interrogate.** Approval is the safety net — keep friction low.
+- Streams are **deliberate and few-but-strong**; promotion is **proposed, never automatic**.
+- **Surface ambiguity, don't guess.** Keep replies tight — the user wants their memory,
+  not a lecture.

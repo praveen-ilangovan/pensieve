@@ -210,6 +210,22 @@ def tag(
 
 
 @app.command()
+def entity(
+    entity_id: str = typer.Argument(..., help="Entity id (see 'pensieve entities')."),
+) -> None:
+    """Show an entity and every note that references it (recall)."""
+    try:
+        view = entity_service().get_entity_view(entity_id)
+    except EntityNotFound as exc:
+        typer.echo(f"✗ No entity '{entity_id}'", err=True)
+        raise typer.Exit(code=1) from exc
+    badge = " [thread]" if view["promoted"] else ""
+    typer.echo(f"{view['name']} ({view['kind']}) ×{view['count']}{badge}")
+    for n in view["notes"]:
+        typer.echo(f"  {n['id']}  {n['text']}  ({n['date'][:10]})")
+
+
+@app.command()
 def promote(
     entity: str = typer.Argument(..., help="Entity id (see 'pensieve entities')."),
     stream: str = typer.Option(

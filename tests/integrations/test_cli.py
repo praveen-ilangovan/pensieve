@@ -102,6 +102,11 @@ def test_promote_flow(integration_store: Path):
     assert result.exit_code == 0
     assert "met rafia" in result.stdout
 
+    # entity recall view shows it as a thread with its notes
+    result = runner.invoke(app, ["entity", "rafia-naseem"])
+    assert result.exit_code == 0
+    assert "met rafia" in result.stdout and "[thread]" in result.stdout
+
     # entities now flags it promoted; promoting again errors
     assert "✓" in runner.invoke(app, ["entities"]).stdout
     assert runner.invoke(app, ["promote", "rafia-naseem", "-s", "recs"]).exit_code == 1

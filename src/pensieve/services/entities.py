@@ -69,6 +69,27 @@ class EntityService:
                 raise EntityNotFound(f"No entity '{entity_id}'")
             return entity
 
+    def get_entity_view(self, entity_id: str) -> dict[str, Any]:
+        """Recall: the entity + every note that references it (promoted or not)."""
+        with self._uow() as uow:
+            entity = uow.repo.get_entity(entity_id)
+            if entity is None:
+                raise EntityNotFound(f"No entity '{entity_id}'")
+            notes = uow.repo.notes_for_entity(entity_id)
+            return {
+                "id": entity.id,
+                "name": entity.name,
+                "kind": entity.kind,
+                "aliases": entity.aliases,
+                "count": len(notes),
+                "promoted": entity.node_id is not None,
+                "node_id": entity.node_id,
+                "notes": [
+                    {"id": n.id, "text": n.text, "date": n.created.isoformat()}
+                    for n in notes
+                ],
+            }
+
     def list_entities(self) -> list[dict[str, Any]]:
         """The whole registry with counts — what the agent loads to resolve against."""
         with self._uow() as uow:

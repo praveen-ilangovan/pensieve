@@ -139,6 +139,21 @@ def delete_note(note: str) -> dict:
 
 
 @mcp.tool()
+def get_entity(entity: str) -> dict:
+    """Recall everything about an entity: its identity + every note that references it.
+
+    Use for "what do I know about X?" — works whether or not it's been promoted.
+
+    Args:
+        entity: Id of the entity (from `list_entities`/`find_entities`).
+    """
+    try:
+        return entity_service().get_entity_view(entity)
+    except EntityNotFound as exc:
+        raise ValueError(f"No entity '{entity}'") from exc
+
+
+@mcp.tool()
 def promote_entity(entity: str, stream: str) -> dict:
     """Promote a recurring entity into its own thread under a stream.
 

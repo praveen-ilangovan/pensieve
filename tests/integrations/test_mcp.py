@@ -59,6 +59,7 @@ def test_mcp_stdio_roundtrip(integration_store: Path):
         "get_stream",
         "list_entities",
         "find_entities",
+        "get_entity",
         "promote_entity",
     } <= tools
     assert added.isError is False
