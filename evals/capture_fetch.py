@@ -153,6 +153,19 @@ def run_checks() -> Checks:
         True,
     )
 
+    # 8. THIN VIEW — the stream lists the thread and hides notes it covers.
+    recs_view = content_service().get_stream_view("recs")
+    checks.eq(
+        "stream view lists the thread",
+        [c["id"] for c in recs_view["children"]],
+        ["rafia-naseem"],
+    )
+    checks.eq(
+        "stream view hides covered notes (only the untagged one stays loose)",
+        [n["text"] for n in recs_view["notes"]],
+        ["Rafia and Travis are curators"],
+    )
+
     # fetching a missing stream raises (engine vocabulary; CLI/MCP translate it)
     checks.raises(
         "fetch missing stream raises NodeNotFound",

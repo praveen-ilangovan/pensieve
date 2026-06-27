@@ -74,13 +74,15 @@ def test_promote_creates_thread_and_attaches_notes(services):
     rafia = next(e for e in services.entities.list_entities() if e["id"] == "rafia")
     assert rafia["promoted"] is True
 
-    # the thread's own view shows the tagged notes (additive — still on recs too)
+    # the thread's own view shows the tagged notes
     thread = services.content.get_stream_view("rafia")
     assert {n["id"] for n in thread["notes"]} == {n1.id, n2.id}
-    assert {n["id"] for n in services.content.get_stream_view("recs")["notes"]} == {
-        n1.id,
-        n2.id,
-    }
+
+    # additive STORAGE: the notes are still attached to recs...
+    with services.uow() as uow:
+        assert {n.id for n in uow.repo.notes_for("recs")} == {n1.id, n2.id}
+    # ...but the stream VIEW now hides them (covered by the rafia thread)
+    assert services.content.get_stream_view("recs")["notes"] == []
 
 
 def test_promote_errors(services):
@@ -98,6 +100,47 @@ def test_promote_errors(services):
     services.entities.promote_entity("rafia", "recs")
     with pytest.raises(PensieveError):
         services.entities.promote_entity("rafia", "recs")  # already promoted
+
+
+def test_stream_view_loose_vs_covered(services):
+    services.streams.create_stream("Recs")
+    n1 = services.content.add_note(
+        "recs", "rafia note", entities=[{"name": "Rafia", "kind": "person"}]
+    )
+    n2 = services.content.add_note("recs", "Recs is an app")  # untagged / stream-level
+    n3 = services.content.add_note(
+        "recs",
+        "rafia and travis",
+        entities=[{"name": "Rafia", "kind": "person"}, {"name": "Travis", "kind": "person"}],
+    )
+    services.entities.promote_entity("rafia", "recs")  # travis stays un-promoted
+
+    recs = services.content.get_stream_view("recs")
+    loose = {n["id"] for n in recs["notes"]}
+    assert n1.id not in loose  # sole tag promoted → covered → hidden
+    assert n2.id in loose  # untagged → loose
+    assert n3.id in loose  # travis un-promoted → not fully covered → loose
+    assert [c["id"] for c in recs["children"]] == ["rafia"]
+
+    # the thread shows all of rafia's notes (a thread has no children → nothing covered)
+    thread = services.content.get_stream_view("rafia")
+    assert {n["id"] for n in thread["notes"]} == {n1.id, n3.id}
+
+
+def test_cross_stream_promotion_does_not_hide_in_other_stream(services):
+    services.streams.create_stream("Recs")
+    services.streams.create_stream("Employment")
+    services.content.add_note(
+        "recs", "met rafia", entities=[{"name": "Rafia", "kind": "person"}]
+    )
+    emp_note = services.content.add_note(
+        "employment", "rafia asked about a role", entities=[{"id": "rafia"}]
+    )
+    services.entities.promote_entity("rafia", "recs")  # thread under recs, not employment
+
+    # the employment note isn't covered by an employment thread → still loose there
+    emp = services.content.get_stream_view("employment")
+    assert emp_note.id in {n["id"] for n in emp["notes"]}
 
 
 def test_tagging_promoted_entity_attaches_to_thread(services):

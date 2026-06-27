@@ -182,24 +182,22 @@ class ContentService:
             uow.commit()
 
     def get_stream_view(self, node_id: str) -> dict[str, Any]:
-        """The node's **thin view**: identity + purpose + its notes (chronological).
+        """The node's **thin view**: identity + purpose + child **threads** + its **loose**
+        notes (those *not* covered by a thread under this node — see ``_covered``).
 
-        ``children`` is present but empty (filled by a later slice). Raises
-        ``NodeNotFound`` if the node is missing.
+        Storage is unchanged (notes stay attached); this only filters what's rendered, so
+        a stream stays a glance as its entities promote. Raises ``NodeNotFound``.
         """
         with self._uow() as uow:
             node = uow.repo.get_node(node_id)
             if node is None:
                 raise NodeNotFound(f"No node '{node_id}'")
-            notes = uow.repo.notes_for(node_id)
-            children = [
-                {
-                    "id": c.id,
-                    "label": c.label,
-                    "kind": c.kind,
-                    "count": len(uow.repo.notes_for(c.id)),
-                }
-                for c in uow.repo.children_of(node_id)
+            children = uow.repo.children_of(node_id)
+            child_ids = {c.id for c in children}
+            loose = [
+                n
+                for n in uow.repo.notes_for(node_id)
+                if not self._covered(uow, n.id, child_ids)
             ]
             return {
                 "id": node.id,
@@ -208,7 +206,27 @@ class ContentService:
                 "purpose": str(node.properties.get("purpose") or ""),
                 "notes": [
                     {"id": n.id, "text": n.text, "date": n.created.isoformat()}
-                    for n in notes
+                    for n in loose
                 ],
-                "children": children,
+                "children": [
+                    {
+                        "id": c.id,
+                        "label": c.label,
+                        "kind": c.kind,
+                        "count": len(uow.repo.notes_for(c.id)),
+                    }
+                    for c in children
+                ],
             }
+
+    def _covered(self, uow: UnitOfWork, note_id: str, child_ids: set[str]) -> bool:
+        """A note is *covered* (hidden from this node's loose list) iff it has ≥1 tag and
+        **every** tagged entity is promoted to a thread under this node."""
+        tags = uow.repo.tags_for_note(note_id)
+        if not tags:
+            return False
+        for entity_id in tags:
+            entity = uow.repo.get_entity(entity_id)
+            if entity is None or entity.node_id not in child_ids:
+                return False
+        return True

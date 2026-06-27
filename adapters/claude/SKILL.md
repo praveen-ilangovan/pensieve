@@ -51,8 +51,11 @@ edit the store directly.
      so you never make duplicates.
    - Pass them as `entities`: `{"id": "<existing>"}` to reuse, or
      `{"name": "Travis King", "kind": "person", "aliases": [...]}` for a new one.
-   - **What to tag:** people, orgs, recurring topics/projects. **Not** dates, values, or
-     incidental nouns (those are the note's text). When unsure, don't tag — or ask.
+   - **What to tag — what the note is *about*, not merely what it *mentions*.** People,
+     orgs, recurring topics/projects the note is genuinely about. **Not** dates, values,
+     incidental nouns, and **not** an overview/stream-level note's name-drops (e.g. "Recs
+     is an app, 4 curators, Rafia leading" is *about Recs*, not about Rafia — leave it
+     untagged so it stays in the stream). When unsure, don't tag — or ask.
 5. **Tidy** the text so it stands alone; **pin relative dates to absolute** ("Tuesday" →
    the actual date).
 6. On approval → `add_note(stream, text, entities=[…])`.
