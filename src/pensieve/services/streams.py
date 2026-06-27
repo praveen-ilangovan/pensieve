@@ -8,13 +8,18 @@ domain/use-case layer: it depends on the `UnitOfWork` port, never on a storage e
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import datetime, timezone
 
 from ..database.models import SCHEMA_VERSION, Node
-from ..errors import PensieveError, StreamExists  # re-exported for callers/tests
+from ..errors import (  # re-exported for callers/tests
+    NodeNotFound,
+    PensieveError,
+    StreamExists,
+)
 from ..repository.base import UnitOfWork
 from ..slug import slugify  # re-exported for callers/tests
 
-__all__ = ["PensieveError", "StreamExists", "StreamService", "slugify"]
+__all__ = ["NodeNotFound", "PensieveError", "StreamExists", "StreamService", "slugify"]
 
 
 class StreamService:
@@ -56,3 +61,25 @@ class StreamService:
         """Fuzzy match over node label + id (streams and threads)."""
         with self._uow() as uow:
             return uow.repo.find_nodes(query)
+
+    def edit_stream(
+        self,
+        stream_id: str,
+        *,
+        name: str | None = None,
+        purpose: str | None = None,
+    ) -> Node:
+        """Rename / repurpose a stream. The **id is immutable** — only display fields
+        change. Raises ``NodeNotFound``."""
+        with self._uow() as uow:
+            node = uow.repo.get_node(stream_id)
+            if node is None:
+                raise NodeNotFound(f"No node '{stream_id}'")
+            if name is not None:
+                node.label = name
+            if purpose is not None:
+                node.properties = {**node.properties, "purpose": purpose}
+            node.updated = datetime.now(timezone.utc)
+            uow.repo.save_node(node)
+            uow.commit()
+            return node

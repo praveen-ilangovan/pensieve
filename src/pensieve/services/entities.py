@@ -139,6 +139,35 @@ class EntityService:
             uow.commit()
             return node
 
+    def edit_entity(
+        self,
+        entity_id: str,
+        *,
+        name: str | None = None,
+        aliases: list[str] | None = None,
+    ) -> Entity:
+        """Rename an entity / replace its aliases. The **id is immutable**. If the entity
+        is promoted, its thread node's label is kept in sync. Raises ``EntityNotFound``."""
+        with self._uow() as uow:
+            entity = uow.repo.get_entity(entity_id)
+            if entity is None:
+                raise EntityNotFound(f"No entity '{entity_id}'")
+            now = _utcnow()
+            if name is not None:
+                entity.name = name
+                if entity.node_id is not None:
+                    node = uow.repo.get_node(entity.node_id)
+                    if node is not None:
+                        node.label = name
+                        node.updated = now
+                        uow.repo.save_node(node)
+            if aliases is not None:
+                entity.aliases = aliases
+            entity.updated = now
+            uow.repo.save_entity(entity)
+            uow.commit()
+            return entity
+
     def _view(self, uow: UnitOfWork, entity: Entity) -> dict[str, Any]:
         count = uow.repo.count_for_entity(entity.id)
         threshold = get_settings().PROMOTION_THRESHOLD

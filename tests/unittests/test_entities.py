@@ -155,6 +155,24 @@ def test_tagging_promoted_entity_attaches_to_thread(services):
     assert n.id in {x["id"] for x in services.content.get_stream_view("rafia")["notes"]}
 
 
+def test_edit_entity_syncs_thread_label(services):
+    services.streams.create_stream("Recs")
+    services.content.add_note("recs", "x", entities=[{"name": "Rafia", "kind": "person"}])
+    services.entities.promote_entity("rafia", "recs")
+
+    services.entities.edit_entity("rafia", name="Rafia Naseem", aliases=["RN"])
+
+    e = services.entities.get_entity("rafia")
+    assert e.id == "rafia"  # id immutable
+    assert e.name == "Rafia Naseem"
+    assert e.aliases == ["RN"]
+    # the promoted thread's label is kept in sync
+    assert services.streams.get_stream("rafia").label == "Rafia Naseem"
+
+    with pytest.raises(EntityNotFound):
+        services.entities.edit_entity("ghost", name="x")
+
+
 def test_get_entity_view(services):
     services.streams.create_stream("Recs")
     services.content.add_note("recs", "a", entities=[{"name": "Rafia", "kind": "person"}])

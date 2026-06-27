@@ -157,8 +157,16 @@ def stream_edit(
     name: str | None = typer.Option(None, "--name", help="New display name."),
     purpose: str | None = typer.Option(None, "--purpose", "-p", help="New purpose."),
 ) -> None:
-    """Rename / repurpose a stream (id stays stable)."""
-    _not_implemented("stream edit")
+    """Rename / repurpose a stream (id stays stable).
+
+    Example: pensieve stream edit recs --name "Recommendations" -p "…"
+    """
+    try:
+        stream_service().edit_stream(stream, name=name, purpose=purpose)
+    except NodeNotFound as exc:
+        typer.echo(f"✗ No stream '{stream}'", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"✓ updated stream '{stream}'")
 
 
 @stream_app.command("rm")
@@ -289,10 +297,20 @@ def entity_promote(
 def entity_edit(
     entity: str = typer.Argument(..., help="Entity id."),
     name: str | None = typer.Option(None, "--name", help="New display name."),
-    alias: list[str] | None = typer.Option(None, "--alias", help="Add an alias."),
+    alias: list[str] | None = typer.Option(
+        None, "--alias", help="Alias (repeatable) — replaces the alias list."
+    ),
 ) -> None:
-    """Rename an entity / edit its aliases (id stays stable)."""
-    _not_implemented("entity edit")
+    """Rename an entity / set its aliases (id stays stable).
+
+    Example: pensieve entity edit rafia-naseem --name "Rafia N." --alias Rafia
+    """
+    try:
+        entity_service().edit_entity(entity, name=name, aliases=alias)
+    except EntityNotFound as exc:
+        typer.echo(f"✗ No entity '{entity}'", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"✓ updated entity '{entity}'")
 
 
 @entity_app.command("rm")

@@ -114,13 +114,29 @@ def test_promote_show_thread_and_recall(integration_store: Path):
     assert runner.invoke(app, ["entity", "promote", "rafia-naseem", "-s", "recs"]).exit_code == 1
 
 
+def test_edit_commands(integration_store: Path):
+    runner.invoke(app, ["stream", "create", "Recs", "-p", "old"])
+    assert (
+        runner.invoke(
+            app, ["stream", "edit", "recs", "--name", "Recommendations", "-p", "new"]
+        ).exit_code
+        == 0
+    )
+    out = runner.invoke(app, ["show", "recs"]).stdout
+    assert "Recommendations" in out and "new" in out
+
+    runner.invoke(app, ["note", "add", "x", "-s", "recs"])
+    runner.invoke(app, ["entity", "link", "note-1", "Rafia", "-k", "person"])
+    assert runner.invoke(app, ["entity", "edit", "rafia", "--name", "Rafia Naseem"]).exit_code == 0
+    assert "Rafia Naseem" in runner.invoke(app, ["show", "rafia"]).stdout
+
+    assert runner.invoke(app, ["stream", "edit", "nope", "--name", "x"]).exit_code == 1
+    assert runner.invoke(app, ["entity", "edit", "ghost", "--name", "x"]).exit_code == 1
+
+
 def test_unimplemented_stubs(integration_store: Path):
-    for cmd in (
-        ["stream", "edit", "recs"],
-        ["stream", "rm", "recs"],
-        ["entity", "edit", "rafia"],
-        ["entity", "rm", "rafia"],
-    ):
+    # rm is still a stub (soft-delete lands in the next chunk)
+    for cmd in (["stream", "rm", "recs"], ["entity", "rm", "rafia"]):
         result = runner.invoke(app, cmd)
         assert result.exit_code == 1
         assert "not implemented yet" in result.output

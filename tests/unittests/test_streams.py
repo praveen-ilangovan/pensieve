@@ -2,7 +2,7 @@
 
 import pytest
 
-from pensieve.errors import StreamExists
+from pensieve.errors import NodeNotFound, StreamExists
 from pensieve.services.streams import slugify
 
 
@@ -47,3 +47,16 @@ def test_get_stream(services):
     assert node is not None
     assert node.id == "recs"
     assert services.streams.get_stream("nope") is None
+
+
+def test_edit_stream_keeps_id(services):
+    services.streams.create_stream("Recs", "old purpose")
+    services.streams.edit_stream("recs", name="Recommendations", purpose="new purpose")
+
+    node = services.streams.get_stream("recs")
+    assert node.id == "recs"  # id immutable
+    assert node.label == "Recommendations"
+    assert node.properties["purpose"] == "new purpose"
+
+    with pytest.raises(NodeNotFound):
+        services.streams.edit_stream("nope", name="x")
