@@ -85,11 +85,16 @@ def test_promote_creates_thread_and_attaches_notes(services):
 
 def test_promote_errors(services):
     services.streams.create_stream("Recs")
-    services.entities.create_entity("Rafia", "person")
-    with pytest.raises(NodeNotFound):
-        services.entities.promote_entity("rafia", "nope")  # missing stream
+    services.entities.create_entity("Rafia", "person")  # no notes yet
+
     with pytest.raises(EntityNotFound):
         services.entities.promote_entity("ghost", "recs")
+    with pytest.raises(NodeNotFound):
+        services.entities.promote_entity("rafia", "nope")  # missing stream
+    with pytest.raises(PensieveError):
+        services.entities.promote_entity("rafia", "recs")  # no notes to promote
+
+    services.content.add_note("recs", "hi", entities=[{"id": "rafia"}])
     services.entities.promote_entity("rafia", "recs")
     with pytest.raises(PensieveError):
         services.entities.promote_entity("rafia", "recs")  # already promoted

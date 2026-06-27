@@ -116,6 +116,8 @@ class EntityService:
                 raise PensieveError(f"Entity '{entity_id}' is already promoted")
             if uow.repo.get_node(parent_stream) is None:
                 raise NodeNotFound(f"No node '{parent_stream}'")
+            if not uow.repo.notes_for_entity(entity_id):
+                raise PensieveError(f"Entity '{entity_id}' has no notes to promote")
             if uow.repo.get_node(entity_id) is not None:
                 raise PensieveError(f"A node '{entity_id}' already exists")
 

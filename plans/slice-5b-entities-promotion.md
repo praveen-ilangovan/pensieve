@@ -169,6 +169,14 @@ decided later with real promoted data in front of us.
   **promote** (thread under stream + notes attached), **recall** (`get_entity`), and a new
   tagged note auto-landing under the promoted thread. **16/16 checks; suite 55 green.**
   (Eval sets `PENSIEVE_PROMOTION_THRESHOLD=2` to reach promotion quickly.)
+- **Model-tightening guards** (from local testing) — ✅ done.
+  - **`add` is stream-only:** `add_note` rejects a thread target — notes reach a thread by
+    **tagging its entity**, not direct add (no `-t` flag; tagging is the single path; 5c's
+    thin view handles "don't clutter the stream"). CLI surfaces the error.
+  - **No empty threads:** `promote_entity` refuses an entity with **0 notes**.
+  - Suite **56 green**, eval 16/16.
+  - *Logged for later:* promote-to-top-level-stream (a topic spanning streams could become
+    its own stream — its own slice); add-to-thread-doesn't-tag wrinkle is now moot (rejected).
 - **Chunk 5 — live verify (user-run)** — pending. `./install.sh` (new skill) → restart
   Claude → clear `~/.pensieve` → re-capture the Rafia/Travis material → watch entities form
   (no dupes), Rafia cross the threshold, get proposed + promoted to a thread; `pensieve

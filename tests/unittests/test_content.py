@@ -2,7 +2,7 @@
 
 import pytest
 
-from pensieve.errors import EntityNotFound, NodeNotFound, NoteNotFound
+from pensieve.errors import EntityNotFound, NodeNotFound, NoteNotFound, PensieveError
 from pensieve.repository.memory import InMemoryUnitOfWork
 
 
@@ -37,6 +37,15 @@ def test_provenance_recorded_on_the_note(services):
 def test_add_note_missing_node_raises(services):
     with pytest.raises(NodeNotFound):
         services.content.add_note("nope", "x")
+
+
+def test_add_note_to_a_thread_is_rejected(services):
+    """`add` targets a stream; a thread fills via tagging, not direct add."""
+    services.streams.create_stream("Recs")
+    services.content.add_note("recs", "x", entities=[{"name": "Rafia", "kind": "person"}])
+    services.entities.promote_entity("rafia", "recs")  # rafia is now a thread
+    with pytest.raises(PensieveError):
+        services.content.add_note("rafia", "y")
 
 
 def test_update_note_rewrites_in_place(services):

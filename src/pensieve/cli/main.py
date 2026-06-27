@@ -84,13 +84,14 @@ def ls() -> None:
 def add(
     text: str = typer.Argument(..., help="The note text to add (quote it)."),
     stream: str = typer.Option(
-        ..., "--stream", "-s", help="Id of the stream to add to (see 'pensieve ls')."
+        ..., "--stream", "-s", help="Id of the stream (top-level) to add to."
     ),
 ) -> None:
     """Add a note to a stream.
 
     Records a piece of information and attaches it to the stream. This is the mechanical
-    `add_note` op; the agent's `capture` flow is what does this with judgment.
+    `add_note` op; the agent's `capture` flow is what does this with judgment. Notes reach
+    a thread by tagging its entity, not by adding to the thread directly.
 
     Example: pensieve add "talking to 4 curators" -s recs
     """
@@ -98,6 +99,9 @@ def add(
         note = content_service().add_note(stream, text, actor="cli", interface="cli")
     except NodeNotFound as exc:
         typer.echo(f"✗ No stream '{stream}'", err=True)
+        raise typer.Exit(code=1) from exc
+    except PensieveError as exc:  # e.g. target is a thread, not a stream
+        typer.echo(f"✗ {exc}", err=True)
         raise typer.Exit(code=1) from exc
     typer.echo(f"✓ added {note.id} to '{stream}'")
 

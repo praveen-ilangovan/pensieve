@@ -65,8 +65,14 @@ class ContentService:
         referenced by id doesn't exist.
         """
         with self._uow() as uow:
-            if uow.repo.get_node(node_id) is None:
+            node = uow.repo.get_node(node_id)
+            if node is None:
                 raise NodeNotFound(f"No node '{node_id}'")
+            if node.parent_id is not None:
+                raise PensieveError(
+                    f"'{node_id}' is a thread, not a stream — capture to a stream; "
+                    "notes reach a thread by tagging its entity."
+                )
             note_id = uow.repo.next_id("_note", "note", "note-")
             now = _utcnow()
             note = Note(
