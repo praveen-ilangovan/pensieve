@@ -57,6 +57,8 @@ def test_mcp_stdio_roundtrip(integration_store: Path):
         "update_note",
         "delete_note",
         "get_stream",
+        "list_entities",
+        "find_entities",
     } <= tools
     assert added.isError is False
     assert "recs" in listed
@@ -95,6 +97,26 @@ def test_mcp_update_and_delete(integration_store: Path):
     assert edited.isError is False
     assert deleted.isError is False
     assert "Wednesday" not in fetched and "Tuesday" not in fetched  # note removed
+
+
+async def _tag_via_capture(store: Path) -> str:
+    async with _client(store) as session:
+        await session.call_tool("create_stream", {"name": "Recs"})
+        await session.call_tool(
+            "add_note",
+            {
+                "stream": "recs",
+                "text": "met Rafia",
+                "entities": [{"name": "Rafia Naseem", "kind": "person"}],
+            },
+        )
+        listed = await session.call_tool("list_entities", {})
+        return str(listed)
+
+
+def test_mcp_add_note_tags_entities(integration_store: Path):
+    listed = asyncio.run(_tag_via_capture(integration_store))
+    assert "rafia-naseem" in listed
 
 
 async def _fetch_missing(store: Path) -> object:

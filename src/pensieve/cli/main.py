@@ -13,7 +13,7 @@ import typer
 from ..config import get_settings
 from ..database.session import init_db
 from ..errors import NodeNotFound, NoteNotFound, StreamExists
-from ..factory import content_service, stream_service
+from ..factory import content_service, entity_service, stream_service
 
 app = typer.Typer(
     name="pensieve",
@@ -156,6 +156,51 @@ def rm(
         typer.echo(f"✗ No note '{note}'", err=True)
         raise typer.Exit(code=1) from exc
     typer.echo(f"✓ deleted {note}")
+
+
+@app.command()
+def entities() -> None:
+    """List the entity registry (people/orgs/topics) with note counts."""
+    rows = entity_service().list_entities()
+    if not rows:
+        typer.echo("No entities yet.")
+        return
+    for e in rows:
+        mark = " ★ promotable" if e["promotable"] else (" ✓" if e["promoted"] else "")
+        typer.echo(f"{e['id']:<20} {e['kind']:<8} ×{e['count']}{mark}")
+
+
+@app.command()
+def find(
+    query: str = typer.Argument(..., help="Name/alias substring to search."),
+) -> None:
+    """Fuzzy-search the entity registry by name or alias."""
+    rows = entity_service().find_entities(query)
+    if not rows:
+        typer.echo(f"No entities matching '{query}'.")
+        return
+    for e in rows:
+        typer.echo(f"{e['id']:<20} {e['name']} ({e['kind']}) ×{e['count']}")
+
+
+@app.command()
+def tag(
+    note: str = typer.Argument(..., help="Note id (e.g. note-3)."),
+    name: str = typer.Argument(..., help="Entity name (resolved/created by slug)."),
+    kind: str = typer.Option(
+        "topic", "--kind", "-k", help="person | org | topic (for a new entity)."
+    ),
+) -> None:
+    """Tag a note with an entity (creates the entity if new).
+
+    Example: pensieve tag note-3 "Rafia Naseem" -k person
+    """
+    try:
+        ids = content_service().tag_note(note, [{"name": name, "kind": kind}])
+    except NoteNotFound as exc:
+        typer.echo(f"✗ No note '{note}'", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"✓ tagged {note} with {ids[0]}")
 
 
 def main() -> None:

@@ -132,4 +132,16 @@ decided later with real promoted data in front of us.
   - Tests: unit (`test_entities.py`) + integration (`TestEntityServiceIntegration`) +
     migration fresh-store. **Suite 41 green, lint clean.**
   - *Not yet wired:* tagging-at-capture (chunk 2), promotion (chunk 3).
-- **Chunks 2–5 — pending.**
+- **Chunk 2 — tagging at capture** — ✅ done.
+  - `ContentService.add_note(entities=…)` resolves/creates entities and tags the note in
+    one transaction; `tag_note(note, entities)` for existing notes; shared `_resolve_entity`
+    (spec is `{id}` reuse, or `{name, kind, aliases?}` resolve-or-create by slug, merging
+    new aliases; dedupes within a call). Raises `EntityNotFound` on bad id.
+  - **MCP:** `add_note(… entities=[…])`, `list_entities`, `find_entities` (tool docstrings
+    steer the agent to resolve against the registry before creating).
+  - **CLI:** `entities` (list + counts + ★promotable), `find <q>`, `tag <note> <name>
+    [-k kind]` (manual tagging for testing — `add` stays human-simple).
+  - Tests: unit (create/reuse/dedup/alias-merge/tag-existing) + integration (sqlite, MCP
+    add_note-tags, CLI flow). **Suite 48 green, lint clean.** Smoke: tag 2 notes → Rafia ×2.
+  - *Not yet:* promotion (chunk 3) — counts accrue, nothing promotes.
+- **Chunks 3–5 — pending.**

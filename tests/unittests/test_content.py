@@ -2,7 +2,7 @@
 
 import pytest
 
-from pensieve.errors import NodeNotFound, NoteNotFound
+from pensieve.errors import EntityNotFound, NodeNotFound, NoteNotFound
 from pensieve.repository.memory import InMemoryUnitOfWork
 
 
@@ -90,6 +90,66 @@ def test_get_stream_view_shape(services):
 def test_get_stream_view_missing_node_raises(services):
     with pytest.raises(NodeNotFound):
         services.content.get_stream_view("nope")
+
+
+def test_add_note_creates_and_tags_new_entity(services):
+    services.streams.create_stream("Recs")
+    note = services.content.add_note(
+        "recs",
+        "met Rafia",
+        entities=[{"name": "Rafia Naseem", "kind": "person", "aliases": ["Rafia"]}],
+    )
+
+    with services.uow() as uow:
+        assert uow.repo.tags_for_note(note.id) == ["rafia-naseem"]
+        ent = uow.repo.get_entity("rafia-naseem")
+        assert ent.kind == "person" and ent.aliases == ["Rafia"]
+
+
+def test_add_note_reuses_existing_entity_by_id_and_dedupes(services):
+    services.streams.create_stream("Recs")
+    services.entities.create_entity("Rafia Naseem", "person")
+
+    # reference existing by id, and (same call) a name that slugs to the same entity
+    note = services.content.add_note(
+        "recs",
+        "rafia again",
+        entities=[{"id": "rafia-naseem"}, {"name": "Rafia Naseem", "kind": "person"}],
+    )
+
+    with services.uow() as uow:
+        assert uow.repo.tags_for_note(note.id) == ["rafia-naseem"]  # one tag, no dup
+        # still exactly one entity in the registry
+        assert [e.id for e in uow.repo.list_entities()] == ["rafia-naseem"]
+
+
+def test_add_note_unknown_entity_id_raises(services):
+    services.streams.create_stream("Recs")
+    with pytest.raises(EntityNotFound):
+        services.content.add_note("recs", "x", entities=[{"id": "ghost"}])
+
+
+def test_add_note_merges_new_aliases_into_existing_entity(services):
+    services.streams.create_stream("Recs")
+    services.entities.create_entity("Rafia Naseem", "person", aliases=["Rafia"])
+
+    services.content.add_note(
+        "recs",
+        "her newsletter",
+        entities=[{"name": "Rafia Naseem", "kind": "person", "aliases": ["her"]}],
+    )
+    assert services.entities.get_entity("rafia-naseem").aliases == ["Rafia", "her"]
+
+
+def test_tag_existing_note(services):
+    services.streams.create_stream("Recs")
+    note = services.content.add_note("recs", "a note")
+    ids = services.content.tag_note(note.id, [{"name": "Travis", "kind": "person"}])
+    assert ids == ["travis"]
+    with services.uow() as uow:
+        assert uow.repo.tags_for_note(note.id) == ["travis"]
+    with pytest.raises(NoteNotFound):
+        services.content.tag_note("note-99", [{"name": "X", "kind": "topic"}])
 
 
 def test_note_can_be_multi_homed(services):

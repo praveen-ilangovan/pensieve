@@ -12,19 +12,31 @@ mistake — a world-change is a *new* note). `delete_note` truly removes one. No
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import datetime, timezone
 from typing import Any
 
-from ..database.models import Note
+from ..database.models import Entity, Note
 from ..errors import (
+    EntityNotFound,
     NodeNotFound,
     NoteNotFound,
     PensieveError,
 )  # re-exported for callers
 from ..repository.base import UnitOfWork
+from ..slug import slugify
 
-__all__ = ["ContentService", "NodeNotFound", "NoteNotFound", "PensieveError"]
+__all__ = [
+    "ContentService",
+    "EntityNotFound",
+    "NodeNotFound",
+    "NoteNotFound",
+    "PensieveError",
+]
+
+# An entity reference from the agent: either {"id": "<existing>"} or
+# {"name": str, "kind": str, "aliases"?: list[str]} to resolve-or-create.
+EntitySpec = dict[str, Any]
 
 
 def _utcnow() -> datetime:
@@ -42,12 +54,15 @@ class ContentService:
         node_id: str,
         text: str,
         *,
+        entities: Sequence[EntitySpec] | None = None,
         actor: str | None = None,
         interface: str | None = None,
     ) -> Note:
-        """Record a new piece of information and attach it to a node (stream/thread).
+        """Record a new piece of information, attach it to a node, and tag the entities
+        it references (resolved/created from ``entities``).
 
-        Raises ``NodeNotFound`` if the node is missing.
+        Raises ``NodeNotFound`` if the node is missing, ``EntityNotFound`` if an entity
+        referenced by id doesn't exist.
         """
         with self._uow() as uow:
             if uow.repo.get_node(node_id) is None:
@@ -64,8 +79,60 @@ class ContentService:
             )
             uow.repo.add_note(note)
             uow.repo.attach(note_id, node_id)
+            for spec in entities or ():
+                entity_id = self._resolve_entity(uow, spec, now)
+                uow.repo.tag_note(note_id, entity_id)
             uow.commit()
             return note
+
+    def tag_note(self, note_id: str, entities: Sequence[EntitySpec]) -> list[str]:
+        """Tag an existing note with entities (resolve/create). Returns the entity ids.
+
+        Raises ``NoteNotFound`` / ``EntityNotFound``.
+        """
+        with self._uow() as uow:
+            if uow.repo.get_note(note_id) is None:
+                raise NoteNotFound(f"No note '{note_id}'")
+            now = _utcnow()
+            ids = []
+            for spec in entities:
+                entity_id = self._resolve_entity(uow, spec, now)
+                uow.repo.tag_note(note_id, entity_id)
+                ids.append(entity_id)
+            uow.commit()
+            return ids
+
+    def _resolve_entity(self, uow: UnitOfWork, spec: EntitySpec, now: datetime) -> str:
+        """Resolve a spec to an entity id: ``{id}`` (must exist) or ``{name, kind}``
+        (resolve-or-create by slug, merging any new aliases)."""
+        if "id" in spec:
+            entity_id = str(spec["id"])
+            if uow.repo.get_entity(entity_id) is None:
+                raise EntityNotFound(f"No entity '{entity_id}'")
+            return entity_id
+
+        name = str(spec["name"])
+        entity_id = slugify(name)
+        aliases = list(spec.get("aliases", []))
+        existing = uow.repo.get_entity(entity_id)
+        if existing is None:
+            uow.repo.add_entity(
+                Entity(
+                    id=entity_id,
+                    name=name,
+                    kind=str(spec.get("kind", "topic")),
+                    aliases=aliases,
+                    created=now,
+                    updated=now,
+                )
+            )
+        elif aliases:  # grow aliases as we learn them
+            merged = list(dict.fromkeys([*existing.aliases, *aliases]))
+            if merged != existing.aliases:
+                existing.aliases = merged
+                existing.updated = now
+                uow.repo.save_entity(existing)
+        return entity_id
 
     def update_note(
         self,

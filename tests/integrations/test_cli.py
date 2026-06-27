@@ -71,6 +71,23 @@ def test_edit_missing_note_exits_nonzero(integration_store: Path):
     assert "No note 'note-99'" in result.output
 
 
+def test_entities_find_tag_flow(integration_store: Path):
+    assert runner.invoke(app, ["create", "--stream", "Recs"]).exit_code == 0
+    assert runner.invoke(app, ["add", "met rafia", "-s", "recs"]).exit_code == 0  # note-1
+
+    result = runner.invoke(app, ["tag", "note-1", "Rafia Naseem", "-k", "person"])
+    assert result.exit_code == 0
+    assert "rafia-naseem" in result.stdout
+
+    result = runner.invoke(app, ["entities"])
+    assert "rafia-naseem" in result.stdout and "person" in result.stdout
+
+    result = runner.invoke(app, ["find", "rafia"])
+    assert "rafia-naseem" in result.stdout
+
+    assert runner.invoke(app, ["tag", "note-99", "X"]).exit_code == 1
+
+
 def test_show_empty_stream(integration_store: Path):
     assert runner.invoke(app, ["create", "--stream", "Recs"]).exit_code == 0
     result = runner.invoke(app, ["show", "recs"])

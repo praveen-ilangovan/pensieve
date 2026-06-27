@@ -15,7 +15,7 @@ from __future__ import annotations
 from mcp.server.fastmcp import Context, FastMCP
 
 from .errors import NodeNotFound, NoteNotFound
-from .factory import content_service, stream_service
+from .factory import content_service, entity_service, stream_service
 
 mcp = FastMCP("pensieve")
 
@@ -59,24 +59,50 @@ def create_stream(name: str, purpose: str = "") -> dict[str, str]:
 
 
 @mcp.tool()
-def add_note(stream: str, text: str, ctx: Context) -> dict:
-    """Add a note (a piece of information) to a stream.
+def list_entities() -> list[dict]:
+    """List the entity registry (people/orgs/topics notes refer to) with note counts.
 
-    This is the mechanical commit step. Do the judgment first — decide *which* stream
-    this belongs to (use `list_streams`), and get the user's OK — then call this. A
-    change in the world is a *new* note; use `update_note` only to fix a mistake.
+    Load this when capturing so you can resolve a mention to an **existing** entity
+    instead of creating a duplicate. `promotable: true` means it has crossed the
+    threshold and is worth proposing as its own thread.
+    """
+    return entity_service().list_entities()
+
+
+@mcp.tool()
+def find_entities(query: str) -> list[dict]:
+    """Fuzzy-search the entity registry by name/alias (a candidate shortlist).
+
+    Use to check "do I already have a 'Rafia'?" before creating a new entity, and to
+    recall ("what do I know about X?").
+    """
+    return entity_service().find_entities(query)
+
+
+@mcp.tool()
+def add_note(
+    stream: str, text: str, ctx: Context, entities: list[dict] | None = None
+) -> dict:
+    """Add a note (a piece of information) to a stream, tagging the entities it mentions.
+
+    Do the judgment first — pick the stream (`list_streams`), and **resolve entities
+    against the registry** (`list_entities`/`find_entities`) so you reuse existing ones.
+    A change in the world is a *new* note; use `update_note` only to fix a mistake.
 
     Args:
         stream: Id of the target stream (from `list_streams`).
         text: The note text.
+        entities: The entities this note references. Each item is either
+            {"id": "<existing-entity-id>"} (reuse) or
+            {"name": str, "kind": "person|org|topic", "aliases": [str]} (create new).
     """
     try:
         note = content_service().add_note(
-            stream, text, actor=_client_name(ctx), interface="mcp"
+            stream, text, entities=entities, actor=_client_name(ctx), interface="mcp"
         )
     except NodeNotFound as exc:
         raise ValueError(f"No stream '{stream}'") from exc
-    return {"id": note.id, "stream": stream}
+    return {"id": note.id, "stream": stream, "entities": entities or []}
 
 
 @mcp.tool()
