@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from .repository.sqlite import SqliteUnitOfWork
 from .services.content import ContentService
+from .services.entities import EntityService
 from .services.streams import StreamService
 
 
@@ -19,3 +20,7 @@ def stream_service() -> StreamService:
 
 def content_service() -> ContentService:
     return ContentService(SqliteUnitOfWork)
+
+
+def entity_service() -> EntityService:
+    return EntityService(SqliteUnitOfWork)

@@ -23,10 +23,18 @@ def _columns(table: str) -> set[str]:
 
 def test_fresh_store_migrates_to_head(integration_store: Path):
     init_db()
-    assert {"nodes", "notes", "attachments", "alembic_version"} <= _tables()
+    assert {
+        "nodes",
+        "notes",
+        "attachments",
+        "entities",
+        "tags",
+        "alembic_version",
+    } <= _tables()
     assert {"history", "todos"}.isdisjoint(_tables())  # dropped by 0003
     assert {"id", "text", "created", "updated", "actor", "interface"} == _columns("notes")
     assert _columns("attachments") == {"note_id", "node_id"}
+    assert {"id", "name", "kind", "aliases", "node_id"} <= _columns("entities")
 
 
 def test_legacy_store_is_adopted_and_upgraded(integration_store: Path):

@@ -18,10 +18,10 @@ from dataclasses import dataclass, field
 from types import TracebackType
 from typing import TypeVar
 
-from ..database.models import Node, Note
+from ..database.models import Entity, Node, Note
 from .base import Repository
 
-_M = TypeVar("_M", Node, Note)
+_M = TypeVar("_M", Node, Note, Entity)
 
 
 def _clone(obj: _M) -> _M:
@@ -36,6 +36,8 @@ class MemoryState:
     nodes: dict[str, Node] = field(default_factory=dict)
     notes: dict[str, Note] = field(default_factory=dict)
     attachments: set[tuple[str, str]] = field(default_factory=set)  # (note_id, node_id)
+    entities: dict[str, Entity] = field(default_factory=dict)
+    tags: set[tuple[str, str]] = field(default_factory=set)  # (note_id, entity_id)
     counters: dict[tuple[str, str], int] = field(default_factory=dict)
 
     def copy(self) -> MemoryState:
@@ -43,6 +45,8 @@ class MemoryState:
             nodes=dict(self.nodes),
             notes=dict(self.notes),
             attachments=set(self.attachments),
+            entities=dict(self.entities),
+            tags=set(self.tags),
             counters=dict(self.counters),
         )
 
@@ -97,6 +101,48 @@ class InMemoryRepository:
     def detach(self, note_id: str, node_id: str) -> None:
         self._state.attachments.discard((note_id, node_id))
 
+    # entities -------------------------------------------------------------
+    def add_entity(self, entity: Entity) -> None:
+        self._state.entities[entity.id] = entity
+
+    def get_entity(self, entity_id: str) -> Entity | None:
+        ent = self._state.entities.get(entity_id)
+        return _clone(ent) if ent is not None else None
+
+    def save_entity(self, entity: Entity) -> None:
+        self._state.entities[entity.id] = entity
+
+    def list_entities(self) -> list[Entity]:
+        ents = sorted(self._state.entities.values(), key=lambda e: e.name)
+        return [_clone(e) for e in ents]
+
+    def find_entities(self, query: str) -> list[Entity]:
+        q = query.strip().lower()
+        out = []
+        for e in self._state.entities.values():
+            haystack = [e.name.lower(), e.id.lower(), *(a.lower() for a in e.aliases)]
+            if any(q in h for h in haystack):
+                out.append(_clone(e))
+        return out
+
+    # tags -----------------------------------------------------------------
+    def tag_note(self, note_id: str, entity_id: str) -> None:
+        self._state.tags.add((note_id, entity_id))
+
+    def untag_note(self, note_id: str, entity_id: str) -> None:
+        self._state.tags.discard((note_id, entity_id))
+
+    def tags_for_note(self, note_id: str) -> list[str]:
+        return [eid for (nid, eid) in self._state.tags if nid == note_id]
+
+    def notes_for_entity(self, entity_id: str) -> list[Note]:
+        ids = [nid for (nid, eid) in self._state.tags if eid == entity_id]
+        notes = [self._state.notes[i] for i in ids if i in self._state.notes]
+        return [_clone(n) for n in sorted(notes, key=lambda n: n.created)]
+
+    def count_for_entity(self, entity_id: str) -> int:
+        return sum(1 for (_, eid) in self._state.tags if eid == entity_id)
+
     def next_id(self, scope: str, kind: str, prefix: str) -> str:
         n = self._state.counters.get((scope, kind), 0) + 1
         self._state.counters[(scope, kind)] = n
@@ -130,4 +176,6 @@ class InMemoryUnitOfWork:
         self._base.nodes = self._work.nodes
         self._base.notes = self._work.notes
         self._base.attachments = self._work.attachments
+        self._base.entities = self._work.entities
+        self._base.tags = self._work.tags
         self._base.counters = self._work.counters

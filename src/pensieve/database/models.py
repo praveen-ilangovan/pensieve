@@ -79,6 +79,34 @@ class Attachment(SQLModel, table=True):
     node_id: str = Field(foreign_key="nodes.id", primary_key=True, index=True)
 
 
+class Entity(SQLModel, table=True):
+    """A named thing notes refer to (person/org/topic/…). Lives as a lightweight
+    registry entry — a *tag target* — until it recurs enough to be **promoted** into its
+    own thread node (``node_id`` then points at it)."""
+
+    __tablename__ = "entities"
+
+    id: str = Field(primary_key=True)  # kebab slug, e.g. "rafia"
+    name: str  # canonical display name
+    kind: str  # person | org | topic | …
+    aliases: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    node_id: str | None = Field(
+        default=None, foreign_key="nodes.id"
+    )  # set on promotion
+    created: datetime = Field(default_factory=_utcnow)
+    updated: datetime = Field(default_factory=_utcnow)
+
+
+class Tag(SQLModel, table=True):
+    """A note references an entity. Many-to-many. ``COUNT(tags)`` per entity is the
+    promotion counter (derived, not stored)."""
+
+    __tablename__ = "tags"
+
+    note_id: str = Field(foreign_key="notes.id", primary_key=True, index=True)
+    entity_id: str = Field(foreign_key="entities.id", primary_key=True, index=True)
+
+
 class Counter(SQLModel, table=True):
     """Non-reusing id counters (scope ``_note`` for global note ids; kind ``note``)."""
 

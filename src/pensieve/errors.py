@@ -22,3 +22,11 @@ class NodeNotFound(PensieveError):
 
 class NoteNotFound(PensieveError):
     """No note exists with the given id."""
+
+
+class EntityNotFound(PensieveError):
+    """No entity exists with the given id."""
+
+
+class EntityExists(PensieveError):
+    """An entity with this id already exists."""

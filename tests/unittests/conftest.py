@@ -14,15 +14,17 @@ import pytest
 
 from pensieve.repository.memory import InMemoryUnitOfWork, MemoryState
 from pensieve.services.content import ContentService
+from pensieve.services.entities import EntityService
 from pensieve.services.streams import StreamService
 
 
 @pytest.fixture
 def services() -> SimpleNamespace:
-    """A StreamService + ContentService sharing one in-memory store.
+    """A Stream/Content/Entity service trio sharing one in-memory store.
 
-    Returns a namespace: ``services.streams``, ``services.content``, ``services.state``
-    (the raw `MemoryState`, for asserting on persisted notes/history directly).
+    Returns a namespace: ``services.streams``, ``services.content``,
+    ``services.entities``, ``services.state`` (the raw `MemoryState`), and
+    ``services.uow`` (a factory, for tagging/attaching directly in tests).
     """
     state = MemoryState()
 
@@ -32,5 +34,7 @@ def services() -> SimpleNamespace:
     return SimpleNamespace(
         streams=StreamService(uow_factory),
         content=ContentService(uow_factory),
+        entities=EntityService(uow_factory),
         state=state,
+        uow=uow_factory,
     )

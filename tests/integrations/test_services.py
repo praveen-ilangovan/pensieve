@@ -9,9 +9,10 @@ from pathlib import Path
 
 import pytest
 
-from pensieve.errors import NodeNotFound, NoteNotFound, StreamExists
+from pensieve.errors import EntityExists, NodeNotFound, NoteNotFound, StreamExists
 from pensieve.repository.sqlite import SqliteUnitOfWork
 from pensieve.services.content import ContentService
+from pensieve.services.entities import EntityService
 from pensieve.services.streams import StreamService
 
 
@@ -85,3 +86,31 @@ class TestContentServiceIntegration:
             content.update_note("note-99", "x")
         with pytest.raises(NoteNotFound):
             content.delete_note("note-99")
+
+
+class TestEntityServiceIntegration:
+    def test_create_find_and_count(self, integration_store: Path):
+        StreamService(SqliteUnitOfWork).create_stream("Recs")
+        entities = EntityService(SqliteUnitOfWork)
+        content = ContentService(SqliteUnitOfWork)
+
+        entities.create_entity("Rafia Naseem", "person", aliases=["The Reader Life"])
+        with pytest.raises(EntityExists):
+            entities.create_entity("Rafia Naseem", "person")
+
+        # fuzzy find over name + alias (real SQLite LIKE)
+        assert [e["id"] for e in entities.find_entities("rafia")] == ["rafia-naseem"]
+        assert [e["id"] for e in entities.find_entities("reader")] == ["rafia-naseem"]
+
+        # tag a note via the repo, count reflects it (durable across a fresh service)
+        note = content.add_note("recs", "met rafia")
+        with SqliteUnitOfWork() as uow:
+            uow.repo.tag_note(note.id, "rafia-naseem")
+            uow.commit()
+
+        rafia = next(
+            e for e in EntityService(SqliteUnitOfWork).list_entities()
+            if e["id"] == "rafia-naseem"
+        )
+        assert rafia["count"] == 1
+        assert rafia["promoted"] is False

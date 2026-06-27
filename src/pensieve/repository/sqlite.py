@@ -11,9 +11,10 @@ from __future__ import annotations
 
 from types import TracebackType
 
+from sqlalchemy import String, cast, func, or_
 from sqlmodel import Session, col, select
 
-from ..database.models import Attachment, Counter, Node, Note
+from ..database.models import Attachment, Counter, Entity, Node, Note, Tag
 from ..database.session import get_engine, init_db
 from .base import Repository
 
@@ -80,6 +81,60 @@ class SqliteRepository:
         att = self._session.get(Attachment, (note_id, node_id))
         if att is not None:
             self._session.delete(att)
+
+    # entities -------------------------------------------------------------
+    def add_entity(self, entity: Entity) -> None:
+        self._session.add(entity)
+
+    def get_entity(self, entity_id: str) -> Entity | None:
+        return self._session.get(Entity, entity_id)
+
+    def save_entity(self, entity: Entity) -> None:
+        self._session.add(entity)
+
+    def list_entities(self) -> list[Entity]:
+        return list(self._session.exec(select(Entity).order_by(col(Entity.name))))
+
+    def find_entities(self, query: str) -> list[Entity]:
+        like = f"%{query.strip()}%"
+        statement = select(Entity).where(
+            or_(
+                col(Entity.name).ilike(like),
+                col(Entity.id).ilike(like),
+                cast(col(Entity.aliases), String).ilike(like),
+            )
+        )
+        return list(self._session.exec(statement))
+
+    # tags -----------------------------------------------------------------
+    def tag_note(self, note_id: str, entity_id: str) -> None:
+        self._session.flush()  # ensure note + entity rows exist before the FK row
+        if self._session.get(Tag, (note_id, entity_id)) is None:
+            self._session.add(Tag(note_id=note_id, entity_id=entity_id))
+
+    def untag_note(self, note_id: str, entity_id: str) -> None:
+        tag = self._session.get(Tag, (note_id, entity_id))
+        if tag is not None:
+            self._session.delete(tag)
+
+    def tags_for_note(self, note_id: str) -> list[str]:
+        statement = select(Tag.entity_id).where(Tag.note_id == note_id)
+        return list(self._session.exec(statement))
+
+    def notes_for_entity(self, entity_id: str) -> list[Note]:
+        statement = (
+            select(Note)
+            .join(Tag, col(Tag.note_id) == col(Note.id))
+            .where(Tag.entity_id == entity_id)
+            .order_by(col(Note.created))
+        )
+        return list(self._session.exec(statement))
+
+    def count_for_entity(self, entity_id: str) -> int:
+        statement = (
+            select(func.count()).select_from(Tag).where(Tag.entity_id == entity_id)
+        )
+        return int(self._session.exec(statement).one())
 
     def next_id(self, scope: str, kind: str, prefix: str) -> str:
         counter = self._session.get(Counter, (scope, kind))

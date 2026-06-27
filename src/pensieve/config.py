@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     BUSY_TIMEOUT_MS: int = 5000
     ECHO: bool = False  # SQLAlchemy echo (SQL logging)
 
+    # An entity becomes a promotion candidate once this many notes reference it.
+    PROMOTION_THRESHOLD: int = 5
+
     @computed_field  # type: ignore[prop-decorator]
     @cached_property
     def db_path(self) -> Path:

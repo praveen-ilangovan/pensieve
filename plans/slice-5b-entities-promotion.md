@@ -119,4 +119,17 @@ decided later with real promoted data in front of us.
 ## 10. Progress log
 > Updated as we build (resume anchor).
 
-- _not started_
+- **Chunk 1 — entity registry + migration `0004`** — ✅ done.
+  - **Model:** `Entity` (id/name/kind/aliases/`node_id`/timestamps) + `Tag` (note↔entity,
+    m:n). Migration `0004_entities`. `slugify` extracted to `pensieve/slug.py` (shared).
+  - **Repo (port + both adapters):** entity CRUD, `list_entities`, `find_entities`
+    (sqlite `LIKE`/`ilike` over name+id+aliases; memory substring), `tag_note`/`untag_note`/
+    `tags_for_note`/`notes_for_entity`/`count_for_entity`. (sqlite `tag_note` flushes
+    first, same FK-ordering reason as `attach`.)
+  - **`EntityService`:** create (slug, `EntityExists`), get (`EntityNotFound`), list/find
+    returning counts + `promoted`/`promotable` (threshold = `PENSIEVE_PROMOTION_THRESHOLD`,
+    default 5). `entity_service()` in factory.
+  - Tests: unit (`test_entities.py`) + integration (`TestEntityServiceIntegration`) +
+    migration fresh-store. **Suite 41 green, lint clean.**
+  - *Not yet wired:* tagging-at-capture (chunk 2), promotion (chunk 3).
+- **Chunks 2–5 — pending.**

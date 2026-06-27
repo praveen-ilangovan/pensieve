@@ -7,22 +7,14 @@ domain/use-case layer: it depends on the `UnitOfWork` port, never on a storage e
 
 from __future__ import annotations
 
-import re
 from collections.abc import Callable
 
 from ..database.models import SCHEMA_VERSION, Node
 from ..errors import PensieveError, StreamExists  # re-exported for callers/tests
 from ..repository.base import UnitOfWork
+from ..slug import slugify  # re-exported for callers/tests
 
 __all__ = ["PensieveError", "StreamExists", "StreamService", "slugify"]
-
-
-def slugify(name: str) -> str:
-    """Derive a stable kebab-case id from a display name."""
-    slug = re.sub(r"[^a-z0-9]+", "-", name.strip().lower()).strip("-")
-    if not slug:
-        raise PensieveError(f"Cannot derive an id from name: {name!r}")
-    return slug
 
 
 class StreamService:
