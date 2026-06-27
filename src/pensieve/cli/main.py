@@ -12,7 +12,13 @@ import typer
 
 from ..config import get_settings
 from ..database.session import init_db
-from ..errors import NodeNotFound, NoteNotFound, StreamExists
+from ..errors import (
+    EntityNotFound,
+    NodeNotFound,
+    NoteNotFound,
+    PensieveError,
+    StreamExists,
+)
 from ..factory import content_service, entity_service, stream_service
 
 app = typer.Typer(
@@ -201,6 +207,31 @@ def tag(
         typer.echo(f"✗ No note '{note}'", err=True)
         raise typer.Exit(code=1) from exc
     typer.echo(f"✓ tagged {note} with {ids[0]}")
+
+
+@app.command()
+def promote(
+    entity: str = typer.Argument(..., help="Entity id (see 'pensieve entities')."),
+    stream: str = typer.Option(
+        ..., "--stream", "-s", help="Parent stream the new thread lives under."
+    ),
+) -> None:
+    """Promote an entity into its own thread under a stream.
+
+    Example: pensieve promote rafia-naseem -s recs
+    """
+    try:
+        node = entity_service().promote_entity(entity, stream)
+    except EntityNotFound as exc:
+        typer.echo(f"✗ No entity '{entity}'", err=True)
+        raise typer.Exit(code=1) from exc
+    except NodeNotFound as exc:
+        typer.echo(f"✗ No stream '{stream}'", err=True)
+        raise typer.Exit(code=1) from exc
+    except PensieveError as exc:
+        typer.echo(f"✗ {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"✓ promoted '{entity}' → thread '{node.id}' under '{stream}'")
 
 
 def main() -> None:

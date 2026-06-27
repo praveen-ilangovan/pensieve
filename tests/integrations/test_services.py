@@ -114,3 +114,21 @@ class TestEntityServiceIntegration:
         )
         assert rafia["count"] == 1
         assert rafia["promoted"] is False
+
+    def test_promote_round_trip(self, integration_store: Path):
+        StreamService(SqliteUnitOfWork).create_stream("Recs")
+        content = ContentService(SqliteUnitOfWork)
+        content.add_note("recs", "met rafia", entities=[{"name": "Rafia", "kind": "person"}])
+        content.add_note("recs", "rafia again", entities=[{"id": "rafia"}])
+
+        node = EntityService(SqliteUnitOfWork).promote_entity("rafia", "recs")
+        assert node.parent_id == "recs"
+
+        # durable: a fresh service sees the thread + its notes, and the promoted flag
+        thread = ContentService(SqliteUnitOfWork).get_stream_view("rafia")
+        assert [n["text"] for n in thread["notes"]] == ["met rafia", "rafia again"]
+        rafia = next(
+            e for e in EntityService(SqliteUnitOfWork).list_entities()
+            if e["id"] == "rafia"
+        )
+        assert rafia["promoted"] is True

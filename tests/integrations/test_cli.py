@@ -88,6 +88,25 @@ def test_entities_find_tag_flow(integration_store: Path):
     assert runner.invoke(app, ["tag", "note-99", "X"]).exit_code == 1
 
 
+def test_promote_flow(integration_store: Path):
+    assert runner.invoke(app, ["create", "--stream", "Recs"]).exit_code == 0
+    runner.invoke(app, ["add", "met rafia", "-s", "recs"])  # note-1
+    runner.invoke(app, ["tag", "note-1", "Rafia Naseem", "-k", "person"])
+
+    result = runner.invoke(app, ["promote", "rafia-naseem", "-s", "recs"])
+    assert result.exit_code == 0
+    assert "rafia-naseem" in result.stdout
+
+    # the promoted thread shows the note
+    result = runner.invoke(app, ["show", "rafia-naseem"])
+    assert result.exit_code == 0
+    assert "met rafia" in result.stdout
+
+    # entities now flags it promoted; promoting again errors
+    assert "✓" in runner.invoke(app, ["entities"]).stdout
+    assert runner.invoke(app, ["promote", "rafia-naseem", "-s", "recs"]).exit_code == 1
+
+
 def test_show_empty_stream(integration_store: Path):
     assert runner.invoke(app, ["create", "--stream", "Recs"]).exit_code == 0
     result = runner.invoke(app, ["show", "recs"])

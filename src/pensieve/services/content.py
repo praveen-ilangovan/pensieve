@@ -80,8 +80,7 @@ class ContentService:
             uow.repo.add_note(note)
             uow.repo.attach(note_id, node_id)
             for spec in entities or ():
-                entity_id = self._resolve_entity(uow, spec, now)
-                uow.repo.tag_note(note_id, entity_id)
+                self._tag(uow, note_id, self._resolve_entity(uow, spec, now))
             uow.commit()
             return note
 
@@ -97,10 +96,18 @@ class ContentService:
             ids = []
             for spec in entities:
                 entity_id = self._resolve_entity(uow, spec, now)
-                uow.repo.tag_note(note_id, entity_id)
+                self._tag(uow, note_id, entity_id)
                 ids.append(entity_id)
             uow.commit()
             return ids
+
+    def _tag(self, uow: UnitOfWork, note_id: str, entity_id: str) -> None:
+        """Tag a note with an entity; if the entity is already promoted, also attach the
+        note to its thread node (so it shows under the thread immediately)."""
+        uow.repo.tag_note(note_id, entity_id)
+        entity = uow.repo.get_entity(entity_id)
+        if entity is not None and entity.node_id is not None:
+            uow.repo.attach(note_id, entity.node_id)
 
     def _resolve_entity(self, uow: UnitOfWork, spec: EntitySpec, now: datetime) -> str:
         """Resolve a spec to an entity id: ``{id}`` (must exist) or ``{name, kind}``

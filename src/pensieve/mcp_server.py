@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from mcp.server.fastmcp import Context, FastMCP
 
-from .errors import NodeNotFound, NoteNotFound
+from .errors import EntityNotFound, NodeNotFound, NoteNotFound
 from .factory import content_service, entity_service, stream_service
 
 mcp = FastMCP("pensieve")
@@ -136,6 +136,27 @@ def delete_note(note: str) -> dict:
     except NoteNotFound as exc:
         raise ValueError(f"No note '{note}'") from exc
     return {"deleted": note}
+
+
+@mcp.tool()
+def promote_entity(entity: str, stream: str) -> dict:
+    """Promote a recurring entity into its own thread under a stream.
+
+    Propose this (with the user's OK) once an entity is `promotable` (see
+    `list_entities`). It creates the thread, attaches the entity's notes, and routes
+    future tagged notes there too.
+
+    Args:
+        entity: Id of the entity to promote (from `list_entities`).
+        stream: Id of the parent stream the thread should live under.
+    """
+    try:
+        node = entity_service().promote_entity(entity, stream)
+    except EntityNotFound as exc:
+        raise ValueError(f"No entity '{entity}'") from exc
+    except NodeNotFound as exc:
+        raise ValueError(f"No stream '{stream}'") from exc
+    return {"id": node.id, "label": node.label, "parent": stream}
 
 
 @mcp.tool()

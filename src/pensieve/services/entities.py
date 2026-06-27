@@ -18,12 +18,17 @@ from datetime import datetime, timezone
 from typing import Any
 
 from ..config import get_settings
-from ..database.models import Entity
-from ..errors import EntityExists, EntityNotFound  # re-exported for callers
+from ..database.models import Entity, Node
+from ..errors import (  # re-exported for callers
+    EntityExists,
+    EntityNotFound,
+    NodeNotFound,
+    PensieveError,
+)
 from ..repository.base import UnitOfWork
 from ..slug import slugify
 
-__all__ = ["EntityNotFound", "EntityExists", "EntityService"]
+__all__ = ["EntityExists", "EntityNotFound", "EntityService", "PensieveError"]
 
 
 def _utcnow() -> datetime:
@@ -73,6 +78,43 @@ class EntityService:
         """Fuzzy candidate shortlist (name/alias substring) with counts."""
         with self._uow() as uow:
             return [self._view(uow, e) for e in uow.repo.find_entities(query)]
+
+    def promote_entity(self, entity_id: str, parent_stream: str) -> Node:
+        """Promote an entity into its own **thread** under a stream: create the node,
+        attach every note that references the entity (additive — they keep their stream
+        attachments), and link the entity to its node.
+
+        Raises ``EntityNotFound`` / ``NodeNotFound`` / ``PensieveError`` (already
+        promoted, or the node id collides).
+        """
+        with self._uow() as uow:
+            entity = uow.repo.get_entity(entity_id)
+            if entity is None:
+                raise EntityNotFound(f"No entity '{entity_id}'")
+            if entity.node_id is not None:
+                raise PensieveError(f"Entity '{entity_id}' is already promoted")
+            if uow.repo.get_node(parent_stream) is None:
+                raise NodeNotFound(f"No node '{parent_stream}'")
+            if uow.repo.get_node(entity_id) is not None:
+                raise PensieveError(f"A node '{entity_id}' already exists")
+
+            now = _utcnow()
+            node = Node(
+                id=entity_id,
+                label=entity.name,
+                kind=entity.kind,
+                parent_id=parent_stream,
+                created=now,
+                updated=now,
+            )
+            uow.repo.add_node(node)
+            for note in uow.repo.notes_for_entity(entity_id):
+                uow.repo.attach(note.id, entity_id)
+            entity.node_id = entity_id
+            entity.updated = now
+            uow.repo.save_entity(entity)
+            uow.commit()
+            return node
 
     def _view(self, uow: UnitOfWork, entity: Entity) -> dict[str, Any]:
         count = uow.repo.count_for_entity(entity.id)

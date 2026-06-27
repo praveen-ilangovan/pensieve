@@ -144,4 +144,15 @@ decided later with real promoted data in front of us.
   - Tests: unit (create/reuse/dedup/alias-merge/tag-existing) + integration (sqlite, MCP
     add_note-tags, CLI flow). **Suite 48 green, lint clean.** Smoke: tag 2 notes → Rafia ×2.
   - *Not yet:* promotion (chunk 3) — counts accrue, nothing promotes.
-- **Chunks 3–5 — pending.**
+- **Chunk 3 — promotion** — ✅ done.
+  - `EntityService.promote_entity(entity, parent_stream)`: create the thread node
+    (`id = entity slug`, `parent = stream`), **attach every tagged note** (additive —
+    notes keep their stream attachment), set `entity.node_id`. Guards: missing entity/
+    stream, already-promoted, node-id collision.
+  - `ContentService._tag`: tagging a **promoted** entity also attaches the note to its
+    thread node (new notes land under the thread automatically).
+  - **CLI:** `promote <entity> -s <stream>`. **MCP:** `promote_entity`.
+  - Tests: unit (promote + attach + errors + tag-promoted-attaches) + integration (sqlite
+    round-trip, MCP, CLI). **Suite 54 green, lint clean.** Smoke (threshold=3): Rafia → ★
+    promotable → promoted → thread shows her notes → `ls` still lists only the stream.
+- **Chunks 4–5 — pending** (skill; evaluator + live).

@@ -2,7 +2,7 @@
 
 import pytest
 
-from pensieve.errors import EntityExists, EntityNotFound
+from pensieve.errors import EntityExists, EntityNotFound, NodeNotFound, PensieveError
 
 
 def _tag(services, note_id: str, entity_id: str) -> None:
@@ -59,6 +59,52 @@ def test_find_by_name_and_alias(services):
     ]
     assert [e["id"] for e in services.entities.find_entities("king")] == ["travis-king"]
     assert services.entities.find_entities("zzz") == []
+
+
+def test_promote_creates_thread_and_attaches_notes(services):
+    services.streams.create_stream("Recs")
+    n1 = services.content.add_note(
+        "recs", "met rafia", entities=[{"name": "Rafia", "kind": "person"}]
+    )
+    n2 = services.content.add_note("recs", "rafia again", entities=[{"id": "rafia"}])
+
+    node = services.entities.promote_entity("rafia", "recs")
+    assert (node.id, node.parent_id, node.kind) == ("rafia", "recs", "person")
+
+    rafia = next(e for e in services.entities.list_entities() if e["id"] == "rafia")
+    assert rafia["promoted"] is True
+
+    # the thread's own view shows the tagged notes (additive — still on recs too)
+    thread = services.content.get_stream_view("rafia")
+    assert {n["id"] for n in thread["notes"]} == {n1.id, n2.id}
+    assert {n["id"] for n in services.content.get_stream_view("recs")["notes"]} == {
+        n1.id,
+        n2.id,
+    }
+
+
+def test_promote_errors(services):
+    services.streams.create_stream("Recs")
+    services.entities.create_entity("Rafia", "person")
+    with pytest.raises(NodeNotFound):
+        services.entities.promote_entity("rafia", "nope")  # missing stream
+    with pytest.raises(EntityNotFound):
+        services.entities.promote_entity("ghost", "recs")
+    services.entities.promote_entity("rafia", "recs")
+    with pytest.raises(PensieveError):
+        services.entities.promote_entity("rafia", "recs")  # already promoted
+
+
+def test_tagging_promoted_entity_attaches_to_thread(services):
+    services.streams.create_stream("Recs")
+    services.content.add_note(
+        "recs", "first", entities=[{"name": "Rafia", "kind": "person"}]
+    )
+    services.entities.promote_entity("rafia", "recs")
+
+    # a NEW note tagging the (now promoted) entity lands under her thread automatically
+    n = services.content.add_note("recs", "newer", entities=[{"id": "rafia"}])
+    assert n.id in {x["id"] for x in services.content.get_stream_view("rafia")["notes"]}
 
 
 def test_notes_and_count_for_entity(services):
