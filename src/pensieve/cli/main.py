@@ -100,6 +100,8 @@ def show(
             )
         for note in view["notes"]:
             typer.echo(f"  {note['id']}  {note['text']}  ({note['date'][:10]})")
+            for asset in note["assets"]:
+                _echo_asset(asset, indent="    ")
         return
 
     try:  # else an entity (recall)
@@ -113,11 +115,16 @@ def show(
         _echo_asset(asset)
     for note in ev["notes"]:
         typer.echo(f"  {note['id']}  {note['text']}  ({note['date'][:10]})")
+        for asset in note["assets"]:
+            _echo_asset(asset, indent="    ")
 
 
-def _echo_asset(asset: dict) -> None:
+def _echo_asset(asset: dict, indent: str = "  ") -> None:
     hint = f"  — {asset['hint']}" if asset["hint"] else ""
-    typer.echo(f"  ▸ {asset['id']}  [{asset['kind']}] {asset['location']}{hint}")
+    flag = "  ⚠ missing" if asset.get("missing") else ""
+    typer.echo(
+        f"{indent}▸ {asset['id']}  [{asset['kind']}] {asset['location']}{hint}{flag}"
+    )
 
 
 @app.command()
@@ -468,7 +475,8 @@ def asset_list(
         return
     for a in rows:
         hint = f"  — {a['hint']}" if a["hint"] else ""
-        typer.echo(f"{a['id']:<10} {a['kind']:<6} {a['location']}{hint}")
+        flag = "  ⚠ missing" if a.get("missing") else ""
+        typer.echo(f"{a['id']:<10} {a['kind']:<6} {a['location']}{hint}{flag}")
 
 
 @asset_app.command("rm")

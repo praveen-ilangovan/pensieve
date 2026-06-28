@@ -292,13 +292,17 @@ def _assets_on(target: str) -> object:
 
 
 def _recall_assets(entity_id: str) -> object:
-    """Asset ids surfaced in an entity's recall (only its *live* notes' assets), or GONE."""
+    """All asset ids surfaced in an entity's recall — its thread's own plus its *live* notes'
+    (per-note) assets, or GONE."""
     from pensieve.errors import EntityNotFound
     from pensieve.factory import entity_service
 
     try:
         view = entity_service().get_entity_view(entity_id)
-        return sorted(a["id"] for a in view["assets"])
+        ids = [a["id"] for a in view["assets"]]
+        for n in view["notes"]:
+            ids += [a["id"] for a in n["assets"]]
+        return sorted(ids)
     except EntityNotFound:
         return "GONE"
 

@@ -100,3 +100,12 @@ dir → `dir`, image ext → `image`, else `file`. `doc` is manual.
 - Note→asset edge: an asset on a note orphaned by `stream rm` is still reachable via direct
   `list_assets(note)` (the note isn't soft-deleted, only non-live); it correctly drops out
   of stream views + entity recall. Acceptable for v1; tighten if it bites.
+- **7b polish — ✅ (from the live-test agent review).** (1) **Per-note assets** now ride
+  each note dict in `get_stream_view` *and* `get_entity_view` (the #1 fix — note-level assets
+  were write-only on recall); top-level `assets` = the stream/thread's **own** identity-level
+  assets only (dropped the lossy flat aggregate). (2) `asset_view` carries two **derived**
+  facts: `remote` (URL → injection surface; the *policy* stays in SKILL) and `missing` (a
+  local pointer that doesn't resolve — the cheap drift signal). No schema/`verified_at`.
+  CLI renders per-note assets nested + a `⚠ missing` marker; SKILL says to honor the flags.
+  Regression test added: a note's asset appears in `get_stream_view`. Suite **89 green**;
+  evals **19/19 + 43/43**.

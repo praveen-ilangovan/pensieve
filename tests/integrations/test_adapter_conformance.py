@@ -48,8 +48,11 @@ def _snapshot(b: SimpleNamespace) -> tuple:
         else:
             views[sid] = (
                 [c["id"] for c in v["children"]],
-                sorted(n["id"] for n in v["notes"]),
-                sorted(a["id"] for a in v["assets"]),
+                sorted(
+                    (n["id"], tuple(sorted(a["id"] for a in n["assets"])))
+                    for n in v["notes"]
+                ),
+                sorted(a["id"] for a in v["assets"]),  # node's own
             )
 
     recall: dict[str, object] = {}
@@ -59,7 +62,15 @@ def _snapshot(b: SimpleNamespace) -> tuple:
         except EntityNotFound:
             recall[eid] = "GONE"
         else:
-            recall[eid] = (rv["count"], rv["promoted"], sorted(n["id"] for n in rv["notes"]))
+            recall[eid] = (
+                rv["count"],
+                rv["promoted"],
+                sorted(
+                    (n["id"], tuple(sorted(a["id"] for a in n["assets"])))
+                    for n in rv["notes"]
+                ),
+                sorted(a["id"] for a in rv["assets"]),  # thread's own
+            )
 
     with b.uow() as uow:
         ports = (

@@ -145,11 +145,17 @@ class AssetService:
 
 
 def asset_view(asset: Asset) -> dict[str, Any]:
-    """The render shape — the pointer + how to use it, **never** its contents."""
+    """The render shape — the pointer + how to use it, **never** its contents.
+
+    Two **derived facts** (not stored, can't drift): ``remote`` (the location is a URL — an
+    untrusted, prompt-injection surface; the *policy* lives in the skill, not here) and
+    ``missing`` (a local pointer that doesn't currently resolve — the cheap drift signal)."""
     return {
         "id": asset.id,
         "kind": asset.kind,
         "location": asset.location,
         "hint": asset.hint,
         "label": asset.label,
+        "remote": _is_url(asset.location),
+        "missing": local_missing(asset.location, asset.kind),
     }

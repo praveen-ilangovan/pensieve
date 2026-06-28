@@ -85,6 +85,32 @@ def test_asset_surfaces_in_stream_view(services):
     assert [a["location"] for a in view["assets"]] == ["/code/recs"]
 
 
+def test_note_asset_appears_in_stream_view(services):
+    # the #1 regression: a note's asset MUST be reachable from get_stream_view (not just
+    # via list_assets(note-N)) — else note-level assets are write-only.
+    services.streams.create_stream("Recs")
+    n = services.content.add_note("recs", "see the mockup")
+    services.assets.add_asset(n.id, "https://x.com/mock.png", kind="image")
+
+    view = services.content.get_stream_view("recs")
+    note = next(x for x in view["notes"] if x["id"] == n.id)
+    assert [a["location"] for a in note["assets"]] == ["https://x.com/mock.png"]
+
+
+def test_view_flags_remote_and_missing(services, tmp_path: Path):
+    services.streams.create_stream("Recs")
+    real = tmp_path / "f.txt"
+    real.write_text("x")
+    services.assets.add_asset("recs", str(real), kind="file")  # asset-1 local, present
+    services.assets.add_asset("recs", str(tmp_path / "gone"), kind="file")  # asset-2 missing
+    services.assets.add_asset("recs", "https://x.com", kind="url")  # asset-3 remote
+
+    by_id = {a["id"]: a for a in services.assets.list_assets("recs")}
+    assert by_id["asset-1"] == {**by_id["asset-1"], "remote": False, "missing": False}
+    assert by_id["asset-2"]["missing"] is True and by_id["asset-2"]["remote"] is False
+    assert by_id["asset-3"]["remote"] is True and by_id["asset-3"]["missing"] is False
+
+
 def test_asset_visibility_is_derived_from_owner(services):
     # an asset on a stream hides when the stream is removed, and returns on restore —
     # no asset-level soft-delete; visibility derives from the owner.
@@ -107,4 +133,6 @@ def test_note_asset_surfaces_in_entity_recall(services):
     services.assets.add_asset(n.id, "https://rafia.dev", kind="url")
 
     view = services.entities.get_entity_view("rafia")
-    assert [a["location"] for a in view["assets"]] == ["https://rafia.dev"]
+    assert view["assets"] == []  # not promoted → no identity-level assets of its own
+    note = next(x for x in view["notes"] if x["id"] == n.id)
+    assert [a["location"] for a in note["assets"]] == ["https://rafia.dev"]  # per-note

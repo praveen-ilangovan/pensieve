@@ -232,7 +232,14 @@ class ContentService:
                 "purpose": str(node.properties.get("purpose") or ""),
                 "assets": [_asset_view(a) for a in uow.repo.assets_for_node(node_id)],
                 "notes": [
-                    {"id": n.id, "text": n.text, "date": n.created.isoformat()}
+                    {
+                        "id": n.id,
+                        "text": n.text,
+                        "date": n.created.isoformat(),
+                        "assets": [
+                            _asset_view(a) for a in uow.repo.assets_for_note(n.id)
+                        ],
+                    }
                     for n in loose
                 ],
                 "children": [

@@ -78,11 +78,13 @@ class EntityService:
             notes = uow.repo.notes_for_entity(entity_id) if entity is not None else []
             if entity is None or not notes:
                 raise EntityNotFound(f"No entity '{entity_id}'")
-            assets = []
-            if entity.node_id is not None:  # its thread's assets (identity-level)
-                assets += uow.repo.assets_for_node(entity.node_id)
-            for n in notes:  # plus assets on the notes about it
-                assets += uow.repo.assets_for_note(n.id)
+            # top-level = the thread's OWN identity-level assets only; a note's assets
+            # render under that note (one home per asset — no lossy flat aggregate).
+            own = (
+                uow.repo.assets_for_node(entity.node_id)
+                if entity.node_id is not None
+                else []
+            )
             return {
                 "id": entity.id,
                 "name": entity.name,
@@ -91,9 +93,16 @@ class EntityService:
                 "count": len(notes),
                 "promoted": entity.node_id is not None,
                 "node_id": entity.node_id,
-                "assets": [asset_view(a) for a in assets],
+                "assets": [asset_view(a) for a in own],
                 "notes": [
-                    {"id": n.id, "text": n.text, "date": n.created.isoformat()}
+                    {
+                        "id": n.id,
+                        "text": n.text,
+                        "date": n.created.isoformat(),
+                        "assets": [
+                            asset_view(a) for a in uow.repo.assets_for_note(n.id)
+                        ],
+                    }
                     for n in notes
                 ],
             }
