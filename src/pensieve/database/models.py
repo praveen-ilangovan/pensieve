@@ -115,6 +115,30 @@ class Tag(SQLModel, table=True):
     deleted_at: datetime | None = None  # soft-unlink (null = active link)
 
 
+class Asset(SQLModel, table=True):
+    """A **by-reference** pointer to live external context — a repo, file, dir, URL, image
+    or doc — attached to a note OR a node (stream/thread). Holds the pointer + a one-line
+    usage ``hint``; never the contents, and the engine never follows it (read-on-demand).
+    Visibility is **derived** from its owner's liveness — it has no ``deleted_at`` of its
+    own, so removal is a plain hard delete."""
+
+    __tablename__ = "assets"
+
+    id: str = Field(primary_key=True)  # global: asset-<n>
+    kind: str  # repo | file | dir | url | image | doc (recommended; not enforced)
+    location: str  # the path or URL (the pointer)
+    hint: str | None = None  # one-line "how to use me"
+    label: str | None = None  # optional short display name
+    # owner: exactly one of the two is set
+    note_id: str | None = Field(default=None, foreign_key="notes.id", index=True)
+    node_id: str | None = Field(default=None, foreign_key="nodes.id", index=True)
+    # provenance (agent-agnostic)
+    actor: str | None = None
+    interface: str | None = None
+    created: datetime = Field(default_factory=_utcnow)
+    updated: datetime = Field(default_factory=_utcnow)
+
+
 class Counter(SQLModel, table=True):
     """Non-reusing id counters (scope ``_note`` for global note ids; kind ``note``)."""
 

@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Protocol, runtime_checkable
 if TYPE_CHECKING:
     from types import TracebackType
 
-    from ..database.models import Entity, Node, Note
+    from ..database.models import Asset, Entity, Node, Note
 
 
 @runtime_checkable
@@ -108,6 +108,21 @@ class Repository(Protocol):
 
     def count_for_entity(self, entity_id: str) -> int:
         """Count of **live** notes actively linked to the entity (the promotion counter)."""
+        ...
+
+    # assets (by-reference pointers; owner = one note or one node)
+    def add_asset(self, asset: Asset) -> None: ...
+    def get_asset(self, asset_id: str) -> Asset | None: ...
+    def remove_asset(self, asset_id: str) -> None:
+        """Hard-remove an asset (a pointer is cheap to re-add; no soft-delete)."""
+        ...
+
+    def assets_for_node(self, node_id: str) -> list[Asset]:
+        """Assets attached to a node (stream/thread), oldest first."""
+        ...
+
+    def assets_for_note(self, note_id: str) -> list[Asset]:
+        """Assets attached to a note, oldest first."""
         ...
 
     def next_id(self, scope: str, kind: str, prefix: str) -> str:

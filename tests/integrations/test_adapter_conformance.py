@@ -14,6 +14,7 @@ from types import SimpleNamespace
 from pensieve.errors import EntityNotFound, NodeNotFound
 from pensieve.repository.memory import InMemoryUnitOfWork, MemoryState
 from pensieve.repository.sqlite import SqliteUnitOfWork
+from pensieve.services.assets import AssetService
 from pensieve.services.content import ContentService
 from pensieve.services.entities import EntityService
 from pensieve.services.streams import StreamService
@@ -24,6 +25,7 @@ def _bundle(uow_factory) -> SimpleNamespace:
         streams=StreamService(uow_factory),
         content=ContentService(uow_factory),
         entities=EntityService(uow_factory),
+        assets=AssetService(uow_factory),
         uow=uow_factory,
     )
 
@@ -47,6 +49,7 @@ def _snapshot(b: SimpleNamespace) -> tuple:
             views[sid] = (
                 [c["id"] for c in v["children"]],
                 sorted(n["id"] for n in v["notes"]),
+                sorted(a["id"] for a in v["assets"]),
             )
 
     recall: dict[str, object] = {}
@@ -65,6 +68,8 @@ def _snapshot(b: SimpleNamespace) -> tuple:
             sorted(c.id for c in uow.repo.children_of("recs", include_deleted=True)),
             {eid: uow.repo.count_for_entity(eid) for eid in ("rafia", "travis")},
             {eid: sorted(uow.repo.tags_for_note(eid)) for eid in ("note-1", "note-3")},
+            sorted(a.id for a in uow.repo.assets_for_node("recs")),
+            sorted(a.id for a in uow.repo.assets_for_note("note-2")),
         )
     return (streams, entities, views, recall, ports)
 
@@ -82,6 +87,8 @@ def _scenario(b: SimpleNamespace) -> list[tuple]:
         entities=[{"id": "rafia"}, {"name": "Travis", "kind": "person"}],
     )  # note-3
     b.content.add_note("employment", "Rafia asked about a role", entities=[{"id": "rafia"}])  # note-4
+    b.assets.add_asset("recs", "~/code/recs", hint="read CLAUDE.md first")  # node-level
+    b.assets.add_asset("note-2", "https://rafia.dev", kind="url")  # note-level
     snaps.append(_snapshot(b))  # after capture
 
     b.entities.promote_entity("rafia", "recs")

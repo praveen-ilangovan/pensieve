@@ -18,10 +18,10 @@ from dataclasses import dataclass, field
 from types import TracebackType
 from typing import TypeVar
 
-from ..database.models import Entity, Node, Note
+from ..database.models import Asset, Entity, Node, Note
 from .base import Repository
 
-_M = TypeVar("_M", Node, Note, Entity)
+_M = TypeVar("_M", Node, Note, Entity, Asset)
 
 
 def _clone(obj: _M) -> _M:
@@ -39,6 +39,7 @@ class MemoryState:
     entities: dict[str, Entity] = field(default_factory=dict)
     # (note_id, entity_id) -> deleted_at (None = active link; a value = soft-unlinked)
     tags: dict[tuple[str, str], object | None] = field(default_factory=dict)
+    assets: dict[str, Asset] = field(default_factory=dict)
     counters: dict[tuple[str, str], int] = field(default_factory=dict)
 
     def copy(self) -> MemoryState:
@@ -48,6 +49,7 @@ class MemoryState:
             attachments=set(self.attachments),
             entities=dict(self.entities),
             tags=dict(self.tags),
+            assets=dict(self.assets),
             counters=dict(self.counters),
         )
 
@@ -221,6 +223,25 @@ class InMemoryRepository:
             if eid == entity_id and deleted is None and self._note_live(nid)
         )
 
+    # assets ---------------------------------------------------------------
+    def add_asset(self, asset: Asset) -> None:
+        self._state.assets[asset.id] = asset
+
+    def get_asset(self, asset_id: str) -> Asset | None:
+        asset = self._state.assets.get(asset_id)
+        return _clone(asset) if asset is not None else None
+
+    def remove_asset(self, asset_id: str) -> None:
+        self._state.assets.pop(asset_id, None)
+
+    def assets_for_node(self, node_id: str) -> list[Asset]:
+        out = [a for a in self._state.assets.values() if a.node_id == node_id]
+        return [_clone(a) for a in sorted(out, key=lambda a: a.created)]
+
+    def assets_for_note(self, note_id: str) -> list[Asset]:
+        out = [a for a in self._state.assets.values() if a.note_id == note_id]
+        return [_clone(a) for a in sorted(out, key=lambda a: a.created)]
+
     def next_id(self, scope: str, kind: str, prefix: str) -> str:
         n = self._state.counters.get((scope, kind), 0) + 1
         self._state.counters[(scope, kind)] = n
@@ -256,4 +277,5 @@ class InMemoryUnitOfWork:
         self._base.attachments = self._work.attachments
         self._base.entities = self._work.entities
         self._base.tags = self._work.tags
+        self._base.assets = self._work.assets
         self._base.counters = self._work.counters

@@ -30,3 +30,7 @@ class EntityNotFound(PensieveError):
 
 class EntityExists(PensieveError):
     """An entity with this id already exists."""
+
+
+class AssetNotFound(PensieveError):
+    """No asset exists with the given id."""

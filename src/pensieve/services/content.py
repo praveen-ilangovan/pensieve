@@ -25,6 +25,7 @@ from ..errors import (
 )  # re-exported for callers
 from ..repository.base import UnitOfWork
 from ..slug import slugify
+from .assets import asset_view as _asset_view
 
 __all__ = [
     "ContentService",
@@ -229,6 +230,7 @@ class ContentService:
                 "label": node.label,
                 "kind": node.kind,
                 "purpose": str(node.properties.get("purpose") or ""),
+                "assets": [_asset_view(a) for a in uow.repo.assets_for_node(node_id)],
                 "notes": [
                     {"id": n.id, "text": n.text, "date": n.created.isoformat()}
                     for n in loose

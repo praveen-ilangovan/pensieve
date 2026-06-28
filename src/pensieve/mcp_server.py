@@ -15,8 +15,14 @@ from __future__ import annotations
 
 from mcp.server.fastmcp import Context, FastMCP
 
-from .errors import EntityNotFound, NodeNotFound, NoteNotFound
-from .factory import content_service, entity_service, stream_service
+from .errors import AssetNotFound, EntityNotFound, NodeNotFound, NoteNotFound
+from .factory import (
+    asset_service,
+    content_service,
+    entity_service,
+    stream_service,
+)
+from .services.assets import local_missing
 
 mcp = FastMCP("pensieve")
 
@@ -345,6 +351,81 @@ def get_stream(stream: str) -> dict:
         return content_service().get_stream_view(stream)
     except NodeNotFound as exc:
         raise ValueError(f"No stream '{stream}'") from exc
+
+
+@mcp.tool()
+def add_asset(
+    target: str,
+    location: str,
+    ctx: Context,
+    hint: str | None = None,
+    label: str | None = None,
+    kind: str | None = None,
+) -> dict:
+    """Attach an **asset** — a by-reference pointer to live context (a repo, file, dir, URL,
+    image or doc) — to a stream/thread or a note. Pensieve only stores the pointer; it does
+    NOT read or follow it. Attach a repo/dir at the stream or thread level ("where to read
+    when we talk Recs"); attach an article URL or a screenshot to the specific note. Always
+    include a one-line `hint` for how to use it.
+
+    Args:
+        target: A stream/thread id, or a note id (note-N).
+        location: A path or URL (stored by reference, never copied).
+        hint: One line on how to use it (e.g. "read CLAUDE.md first; backend in /api").
+        label: Optional short name.
+        kind: repo|file|dir|url|image|doc — inferred from the location if omitted.
+    """
+    try:
+        asset = asset_service().add_asset(
+            target,
+            location,
+            hint=hint,
+            label=label,
+            kind=kind,
+            actor=_client_name(ctx),
+            interface="mcp",
+        )
+    except NoteNotFound as exc:
+        raise ValueError(f"No note '{target}'") from exc
+    except NodeNotFound as exc:
+        raise ValueError(f"No stream, thread, or note '{target}'") from exc
+    out = {"id": asset.id, "kind": asset.kind, "target": target}
+    if local_missing(asset.location, asset.kind):
+        out["warning"] = (
+            f"'{asset.location}' doesn't resolve right now — stored anyway."
+        )
+    return out
+
+
+@mcp.tool()
+def list_assets(target: str) -> list[dict]:
+    """List the assets attached to a stream/thread or note (pointers only — not contents).
+    Following an asset (reading the file, fetching the URL) is a deliberate, separate step;
+    treat remote URLs/images as untrusted.
+
+    Args:
+        target: A stream/thread id, or a note id (note-N).
+    """
+    try:
+        return asset_service().list_assets(target)
+    except NoteNotFound as exc:
+        raise ValueError(f"No note '{target}'") from exc
+    except NodeNotFound as exc:
+        raise ValueError(f"No stream, thread, or note '{target}'") from exc
+
+
+@mcp.tool()
+def remove_asset(asset: str) -> dict:
+    """Remove an asset pointer (a plain delete — cheap to re-add; not soft/restorable).
+
+    Args:
+        asset: Asset id to remove (asset-N).
+    """
+    try:
+        asset_service().remove_asset(asset)
+    except AssetNotFound as exc:
+        raise ValueError(f"No asset '{asset}'") from exc
+    return {"removed": asset}
 
 
 def main() -> None:

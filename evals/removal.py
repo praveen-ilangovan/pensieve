@@ -280,6 +280,67 @@ def _scenario_G(checks: Checks) -> None:
     )
 
 
+def _assets_on(target: str) -> object:
+    """Asset ids attached to a target, or GONE if the owner isn't reachable (derived)."""
+    from pensieve.errors import NodeNotFound, NoteNotFound
+    from pensieve.factory import asset_service
+
+    try:
+        return sorted(a["id"] for a in asset_service().list_assets(target))
+    except (NodeNotFound, NoteNotFound):
+        return "GONE"
+
+
+def _recall_assets(entity_id: str) -> object:
+    """Asset ids surfaced in an entity's recall (only its *live* notes' assets), or GONE."""
+    from pensieve.errors import EntityNotFound
+    from pensieve.factory import entity_service
+
+    try:
+        view = entity_service().get_entity_view(entity_id)
+        return sorted(a["id"] for a in view["assets"])
+    except EntityNotFound:
+        return "GONE"
+
+
+def _scenario_H(checks: Checks) -> None:
+    """Assets are by-reference and derive visibility from their owner — they hide when the
+    owner is removed and return on restore; an asset on a shared note survives `entity rm`."""
+    from pensieve.factory import asset_service, entity_service, stream_service
+
+    ids = _seed()
+    asset_service().add_asset("recs", "/code/recs", kind="repo")  # asset-1 (node)
+    asset_service().add_asset(
+        ids["n3"], "https://demo.recs", kind="url"
+    )  # asset-2 (shared note)
+
+    checks.eq("H: asset on stream is listed", _assets_on("recs"), ["asset-1"])
+    # the shared note's asset surfaces in rafia's recall (n3 is one of her live notes)
+    checks.eq(
+        "H: shared note's asset shows in entity recall",
+        _recall_assets("rafia"),
+        ["asset-2"],
+    )
+
+    entity_service().delete_entity("travis")  # unlink; note n3 survives (rafia)
+    checks.eq(
+        "H: shared note's asset survives entity rm",
+        _recall_assets("rafia"),
+        ["asset-2"],
+    )
+
+    stream_service().delete_stream("recs")  # owner gone → assets hide (derived)
+    checks.eq("H: stream asset hides with its owner", _assets_on("recs"), "GONE")
+    # n3 is now non-live (its only home is removed) → its asset drops out of recall
+    checks.eq(
+        "H: note asset hides when its note goes non-live", _recall_assets("rafia"), []
+    )
+
+    stream_service().restore_stream("recs")
+    checks.eq("H: stream asset returns on restore", _assets_on("recs"), ["asset-1"])
+    checks.eq("H: note asset returns on restore", _recall_assets("rafia"), ["asset-2"])
+
+
 def run_checks() -> Checks:
     checks = Checks()
     for scenario in (
@@ -290,6 +351,7 @@ def run_checks() -> Checks:
         _scenario_E,
         _scenario_F,
         _scenario_G,
+        _scenario_H,
     ):
         _run_isolated(scenario, checks)
     return checks

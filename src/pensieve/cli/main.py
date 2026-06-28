@@ -20,13 +20,15 @@ import typer
 from ..config import get_settings
 from ..database.session import init_db
 from ..errors import (
+    AssetNotFound,
     EntityNotFound,
     NodeNotFound,
     NoteNotFound,
     PensieveError,
     StreamExists,
 )
-from ..factory import content_service, entity_service, stream_service
+from ..factory import asset_service, content_service, entity_service, stream_service
+from ..services.assets import local_missing
 
 _HELP = """
 Pensieve — your manually-triggered, self-organising memory.
@@ -57,9 +59,13 @@ note_app = typer.Typer(no_args_is_help=True, help="Notes — pieces of informati
 entity_app = typer.Typer(
     no_args_is_help=True, help="Entities — people/orgs/topics, and their threads."
 )
+asset_app = typer.Typer(
+    no_args_is_help=True, help="Assets — by-reference pointers (files/dirs/URLs)."
+)
 app.add_typer(stream_app, name="stream")
 app.add_typer(note_app, name="note")
 app.add_typer(entity_app, name="entity")
+app.add_typer(asset_app, name="asset")
 
 
 # --------------------------------------------------------------------------- #
@@ -84,8 +90,10 @@ def show(
     else:
         purpose = view["purpose"] or "—"
         typer.echo(f"{view['label']} · {purpose}")
-        if not view["children"] and not view["notes"]:
+        if not view["children"] and not view["notes"] and not view["assets"]:
             typer.echo("  (empty)")
+        for asset in view["assets"]:
+            _echo_asset(asset)
         for child in view["children"]:
             typer.echo(
                 f"  ⤷ thread: {child['id']}  ({child['kind']}) ×{child['count']}"
@@ -101,8 +109,15 @@ def show(
         raise typer.Exit(code=1) from exc
     badge = " [thread]" if ev["promoted"] else ""
     typer.echo(f"{ev['name']} ({ev['kind']}) ×{ev['count']}{badge}")
+    for asset in ev["assets"]:
+        _echo_asset(asset)
     for note in ev["notes"]:
         typer.echo(f"  {note['id']}  {note['text']}  ({note['date'][:10]})")
+
+
+def _echo_asset(asset: dict) -> None:
+    hint = f"  — {asset['hint']}" if asset["hint"] else ""
+    typer.echo(f"  ▸ {asset['id']}  [{asset['kind']}] {asset['location']}{hint}")
 
 
 @app.command()
@@ -390,6 +405,83 @@ def entity_restore(
         typer.echo(f"✗ No entity '{entity}'", err=True)
         raise typer.Exit(code=1) from exc
     typer.echo(f"✓ restored entity '{entity}'")
+
+
+# --------------------------------------------------------------------------- #
+# asset
+# --------------------------------------------------------------------------- #
+@asset_app.command("add")
+def asset_add(
+    target: str = typer.Argument(..., help="Stream/thread id, or a note id (note-N)."),
+    location: str = typer.Argument(..., help="A path or URL (stored by reference)."),
+    hint: str | None = typer.Option(
+        None, "--hint", help="One line on how to use it (e.g. 'read CLAUDE.md first')."
+    ),
+    label: str | None = typer.Option(None, "--label", help="Optional short name."),
+    kind: str | None = typer.Option(
+        None, "--kind", "-k", help="repo|file|dir|url|image|doc (inferred if omitted)."
+    ),
+) -> None:
+    """Attach an asset (a by-reference pointer) to a stream, thread, or note.
+
+    Example: pensieve asset add recs ~/code/recs --hint "read CLAUDE.md first"
+    """
+    try:
+        asset = asset_service().add_asset(
+            target,
+            location,
+            hint=hint,
+            label=label,
+            kind=kind,
+            actor="cli",
+            interface="cli",
+        )
+    except NoteNotFound as exc:
+        typer.echo(f"✗ No note '{target}'", err=True)
+        raise typer.Exit(code=1) from exc
+    except NodeNotFound as exc:
+        typer.echo(f"✗ No stream, thread, or note '{target}'", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"✓ added {asset.id} ({asset.kind}) to '{target}'")
+    if local_missing(asset.location, asset.kind):
+        typer.echo(
+            f"  ⚠ '{asset.location}' doesn't resolve right now — stored anyway (pointer).",
+            err=True,
+        )
+
+
+@asset_app.command("list")
+def asset_list(
+    target: str = typer.Argument(..., help="Stream/thread id, or a note id (note-N)."),
+) -> None:
+    """List the assets attached to a stream, thread, or note."""
+    try:
+        rows = asset_service().list_assets(target)
+    except NoteNotFound as exc:
+        typer.echo(f"✗ No note '{target}'", err=True)
+        raise typer.Exit(code=1) from exc
+    except NodeNotFound as exc:
+        typer.echo(f"✗ No stream, thread, or note '{target}'", err=True)
+        raise typer.Exit(code=1) from exc
+    if not rows:
+        typer.echo(f"No assets on '{target}'.")
+        return
+    for a in rows:
+        hint = f"  — {a['hint']}" if a["hint"] else ""
+        typer.echo(f"{a['id']:<10} {a['kind']:<6} {a['location']}{hint}")
+
+
+@asset_app.command("rm")
+def asset_rm(
+    asset: str = typer.Argument(..., help="Asset id to remove (asset-N)."),
+) -> None:
+    """Remove an asset (a plain delete — pointers are cheap to re-add)."""
+    try:
+        asset_service().remove_asset(asset)
+    except AssetNotFound as exc:
+        typer.echo(f"✗ No asset '{asset}'", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"✓ removed {asset}")
 
 
 def main() -> None:

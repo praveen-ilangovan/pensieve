@@ -27,6 +27,7 @@ from ..errors import (  # re-exported for callers
 )
 from ..repository.base import UnitOfWork
 from ..slug import slugify
+from .assets import asset_view
 
 __all__ = ["EntityExists", "EntityNotFound", "EntityService", "PensieveError"]
 
@@ -77,6 +78,11 @@ class EntityService:
             notes = uow.repo.notes_for_entity(entity_id) if entity is not None else []
             if entity is None or not notes:
                 raise EntityNotFound(f"No entity '{entity_id}'")
+            assets = []
+            if entity.node_id is not None:  # its thread's assets (identity-level)
+                assets += uow.repo.assets_for_node(entity.node_id)
+            for n in notes:  # plus assets on the notes about it
+                assets += uow.repo.assets_for_note(n.id)
             return {
                 "id": entity.id,
                 "name": entity.name,
@@ -85,6 +91,7 @@ class EntityService:
                 "count": len(notes),
                 "promoted": entity.node_id is not None,
                 "node_id": entity.node_id,
+                "assets": [asset_view(a) for a in assets],
                 "notes": [
                     {"id": n.id, "text": n.text, "date": n.created.isoformat()}
                     for n in notes

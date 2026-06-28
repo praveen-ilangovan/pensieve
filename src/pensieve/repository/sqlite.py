@@ -14,7 +14,7 @@ from types import TracebackType
 from sqlalchemy import String, cast, func, or_, text
 from sqlmodel import Session, col, select
 
-from ..database.models import Attachment, Entity, Node, Note, Tag
+from ..database.models import Asset, Attachment, Entity, Node, Note, Tag
 from ..database.session import get_engine, init_db
 from .base import Repository
 
@@ -213,6 +213,31 @@ class SqliteRepository:
             .where(col(Node.deleted_at).is_(None))
         )
         return int(self._session.exec(statement).one())
+
+    # assets ---------------------------------------------------------------
+    def add_asset(self, asset: Asset) -> None:
+        self._session.flush()  # owner FK (note_id/node_id) must exist first
+        self._session.add(asset)
+
+    def get_asset(self, asset_id: str) -> Asset | None:
+        return self._session.get(Asset, asset_id)
+
+    def remove_asset(self, asset_id: str) -> None:
+        asset = self._session.get(Asset, asset_id)
+        if asset is not None:
+            self._session.delete(asset)
+
+    def assets_for_node(self, node_id: str) -> list[Asset]:
+        statement = (
+            select(Asset).where(Asset.node_id == node_id).order_by(col(Asset.created))
+        )
+        return list(self._session.exec(statement))
+
+    def assets_for_note(self, note_id: str) -> list[Asset]:
+        statement = (
+            select(Asset).where(Asset.note_id == note_id).order_by(col(Asset.created))
+        )
+        return list(self._session.exec(statement))
 
     def next_id(self, scope: str, kind: str, prefix: str) -> str:
         # Atomic allocate-and-increment in a single statement: SQLite runs the upsert under

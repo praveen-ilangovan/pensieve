@@ -13,6 +13,7 @@ from types import SimpleNamespace
 import pytest
 
 from pensieve.repository.memory import InMemoryUnitOfWork, MemoryState
+from pensieve.services.assets import AssetService
 from pensieve.services.content import ContentService
 from pensieve.services.entities import EntityService
 from pensieve.services.streams import StreamService
@@ -35,6 +36,7 @@ def services() -> SimpleNamespace:
         streams=StreamService(uow_factory),
         content=ContentService(uow_factory),
         entities=EntityService(uow_factory),
+        assets=AssetService(uow_factory),
         state=state,
         uow=uow_factory,
     )

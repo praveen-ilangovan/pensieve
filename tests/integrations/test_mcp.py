@@ -69,6 +69,9 @@ EXPECTED_TOOLS = {
     "remove_entity",
     "restore_entity",
     "promote_entity",
+    "add_asset",
+    "list_assets",
+    "remove_asset",
 }
 
 
@@ -204,6 +207,26 @@ def test_mcp_promote_entity(integration_store: Path):
     promoted, thread = asyncio.run(_promote(integration_store))
     assert promoted.isError is False
     assert "met Rafia" in thread  # the entity's note lives under the new thread
+
+
+async def _assets(store: Path) -> tuple[object, str, str]:
+    async with _client(store) as session:
+        await session.call_tool("create_stream", {"name": "Recs"})
+        added = await session.call_tool(
+            "add_asset",
+            {"target": "recs", "location": "~/code/recs", "hint": "read CLAUDE.md first"},
+        )
+        listed = await session.call_tool("list_assets", {"target": "recs"})
+        await session.call_tool("remove_asset", {"asset": "asset-1"})
+        after = await session.call_tool("list_assets", {"target": "recs"})
+        return added, str(listed), str(after)
+
+
+def test_mcp_asset_add_list_remove(integration_store: Path):
+    added, listed, after = asyncio.run(_assets(integration_store))
+    assert added.isError is False
+    assert "asset-1" in listed and "read CLAUDE.md first" in listed
+    assert "asset-1" not in after  # removed
 
 
 async def _fetch_missing(store: Path) -> object:
