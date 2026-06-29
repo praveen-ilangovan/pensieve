@@ -16,7 +16,7 @@ from collections.abc import Callable, Sequence
 from datetime import datetime, timezone
 from typing import Any
 
-from ..database.models import Entity, Note
+from ..database.models import Asset, Entity, Note
 from ..errors import (
     EntityNotFound,
     NodeNotFound,
@@ -40,8 +40,34 @@ __all__ = [
 EntitySpec = dict[str, Any]
 
 
+# default top-K per search section; truncation is always surfaced, never silent
+_SEARCH_LIMIT = 20
+
+
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _search_terms(query: str) -> list[str]:
+    """A query → a bag of lowercased terms (OR-ed downstream; recall over precision)."""
+    return [t for t in query.lower().split() if t]
+
+
+def _snippet(text: str, terms: list[str], width: int = 200) -> str:
+    """A short window of the note text centred on the first matching term."""
+    if len(text) <= width:
+        return text
+    low = text.lower()
+    hits = [low.find(t) for t in terms if t in low]
+    pos = min(hits) if hits else 0
+    start = max(0, pos - width // 3)
+    end = min(len(text), start + width)
+    snippet = text[start:end]
+    if start > 0:
+        snippet = "…" + snippet
+    if end < len(text):
+        snippet = snippet + "…"
+    return snippet
 
 
 class ContentService:
@@ -252,6 +278,54 @@ class ContentService:
                     for c in children
                 ],
             }
+
+    def search(self, query: str, *, limit: int = _SEARCH_LIMIT) -> dict[str, Any]:
+        """Recall over **content**: note prose (stemmed, ranked) + asset pointers
+        (hint/label/location). Live results only; the engine never follows a pointer. Each
+        section is capped at ``limit`` with a ``*_truncated`` flag — never a silent cap."""
+        empty = {
+            "query": query,
+            "notes": [],
+            "assets": [],
+            "notes_truncated": False,
+            "assets_truncated": False,
+        }
+        terms = _search_terms(query)
+        if not terms:
+            return empty
+        with self._uow() as uow:
+            raw_notes = uow.repo.search_notes(
+                terms, limit + 1
+            )  # +1 to detect truncation
+            raw_assets = uow.repo.search_assets(terms, limit + 1)
+            return {
+                "query": query,
+                "notes": [
+                    self._search_note_view(uow, n, terms) for n in raw_notes[:limit]
+                ],
+                "assets": [self._search_asset_view(a) for a in raw_assets[:limit]],
+                "notes_truncated": len(raw_notes) > limit,
+                "assets_truncated": len(raw_assets) > limit,
+            }
+
+    def _search_note_view(
+        self, uow: UnitOfWork, note: Note, terms: list[str]
+    ) -> dict[str, Any]:
+        homes = uow.repo.nodes_for_note(note.id)
+        return {
+            "id": note.id,
+            "text": note.text,
+            "snippet": _snippet(note.text, terms),
+            "date": note.created.isoformat(),
+            "streams": [{"id": h.id, "label": h.label} for h in homes],
+            "entities": uow.repo.tags_for_note(note.id),
+        }
+
+    def _search_asset_view(self, asset: Asset) -> dict[str, Any]:
+        view = _asset_view(asset)  # id/kind/location/hint/label/remote/missing
+        view["owner"] = asset.node_id or asset.note_id
+        view["owner_kind"] = "node" if asset.node_id else "note"
+        return view
 
     def _covered(self, uow: UnitOfWork, note_id: str, child_ids: set[str]) -> bool:
         """A note is *covered* (hidden from this node's loose list) iff it has ≥1 tag and

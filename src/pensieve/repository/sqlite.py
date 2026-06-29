@@ -81,6 +81,17 @@ class SqliteRepository:
     # notes ----------------------------------------------------------------
     def add_note(self, note: Note) -> None:
         self._session.add(note)
+        self._fts_sync(note)
+
+    def _fts_sync(self, note: Note) -> None:
+        # keep the FTS index in step with the note's text (single source of truth = notes).
+        self._session.execute(
+            text("DELETE FROM notes_fts WHERE note_id = :id"), {"id": note.id}
+        )
+        self._session.execute(
+            text("INSERT INTO notes_fts (note_id, text) VALUES (:id, :t)"),
+            {"id": note.id, "t": note.text},
+        )
 
     def get_note(self, note_id: str) -> Note | None:
         note = self._session.get(Note, note_id)
@@ -88,6 +99,7 @@ class SqliteRepository:
 
     def save_note(self, note: Note) -> None:
         self._session.add(note)
+        self._fts_sync(note)  # text may have changed
 
     def set_note_deleted(self, note_id: str, when: object) -> bool:
         note = self._session.get(Note, note_id)  # raw (may be deleted) — for rm/restore
@@ -107,6 +119,9 @@ class SqliteRepository:
         note = self._session.get(Note, note_id)
         if note is not None:
             self._session.delete(note)
+        self._session.execute(
+            text("DELETE FROM notes_fts WHERE note_id = :id"), {"id": note_id}
+        )
 
     def notes_for(self, node_id: str) -> list[Note]:
         # the node is visible (caller navigated to it) → its non-deleted notes are live
@@ -118,6 +133,82 @@ class SqliteRepository:
             .order_by(col(Note.created))
         )
         return list(self._session.exec(statement))
+
+    def nodes_for_note(self, note_id: str) -> list[Node]:
+        statement = (
+            select(Node)
+            .join(Attachment, col(Attachment.node_id) == col(Node.id))
+            .where(Attachment.note_id == note_id)
+            .where(col(Node.deleted_at).is_(None))
+            .order_by(col(Node.label))
+        )
+        return list(self._session.exec(statement))
+
+    # search ---------------------------------------------------------------
+    def search_notes(self, terms: list[str], limit: int) -> list[Note]:
+        if not terms:
+            return []
+        # OR the terms, each quoted as a phrase so punctuation/operators can't break MATCH
+        match = " OR ".join('"' + t.replace('"', "") + '"' for t in terms)
+        rows = self._session.execute(
+            text(
+                "SELECT notes_fts.note_id FROM notes_fts "
+                "JOIN notes n ON n.id = notes_fts.note_id "
+                "WHERE notes_fts MATCH :m AND n.deleted_at IS NULL "
+                "AND EXISTS (SELECT 1 FROM attachments a JOIN nodes nd "
+                "            ON nd.id = a.node_id "
+                "            WHERE a.note_id = n.id AND nd.deleted_at IS NULL) "
+                "ORDER BY bm25(notes_fts) LIMIT :lim"
+            ),
+            {"m": match, "lim": limit},
+        ).all()
+        notes = [self._session.get(Note, r[0]) for r in rows]
+        return [n for n in notes if n is not None]
+
+    def search_assets(self, terms: list[str], limit: int) -> list[Asset]:
+        if not terms:
+            return []
+
+        def field_match(term: str):  # any of hint/label/location contains the term
+            pat = f"%{term}%"
+            return or_(
+                func.lower(func.coalesce(Asset.hint, "")).like(pat),
+                func.lower(func.coalesce(Asset.label, "")).like(pat),
+                func.lower(Asset.location).like(pat),
+            )
+
+        statement = (
+            select(Asset)
+            .where(or_(*[field_match(t) for t in terms]))
+            .order_by(col(Asset.created).desc())
+        )
+        out: list[Asset] = []
+        for asset in self._session.exec(statement):
+            if self._asset_owner_live(asset):
+                out.append(asset)
+                if len(out) >= limit:
+                    break
+        return out
+
+    def _asset_owner_live(self, asset: Asset) -> bool:
+        if asset.node_id is not None:
+            return self.get_node(asset.node_id) is not None
+        if asset.note_id is not None:
+            return self._note_is_live(asset.note_id)
+        return False
+
+    def _note_is_live(self, note_id: str) -> bool:
+        note = self._session.get(Note, note_id)
+        if note is None or note.deleted_at is not None:
+            return False
+        home = self._session.exec(
+            select(Attachment)
+            .join(Node, col(Node.id) == col(Attachment.node_id))
+            .where(Attachment.note_id == note_id)
+            .where(col(Node.deleted_at).is_(None))
+            .limit(1)
+        ).first()
+        return home is not None
 
     # attachments ----------------------------------------------------------
     def attach(self, note_id: str, node_id: str) -> None:

@@ -81,6 +81,10 @@ def _snapshot(b: SimpleNamespace) -> tuple:
             {eid: sorted(uow.repo.tags_for_note(eid)) for eid in ("note-1", "note-3")},
             sorted(a.id for a in uow.repo.assets_for_node("recs")),
             sorted(a.id for a in uow.repo.assets_for_note("note-2")),
+            # search_assets is deterministic substring → both adapters must agree.
+            # (search_notes is intentionally NOT here: SQLite uses FTS5/bm25, the in-memory
+            #  double uses substring/recency — engine-specific by design, tested separately.)
+            sorted(a.id for a in uow.repo.search_assets(["rafia", "recs"], 10)),
         )
     return (streams, entities, views, recall, ports)
 

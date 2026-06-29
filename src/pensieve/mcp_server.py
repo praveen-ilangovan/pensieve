@@ -339,6 +339,20 @@ def restore_entity(entity: str) -> dict:
 
 
 @mcp.tool()
+def search(query: str) -> dict:
+    """Search the memory's **content** for recall — note prose (stemmed, relevance-ranked)
+    and asset **pointers** (matched on hint/label/location, never their contents). Use for
+    "what did we decide about X" when you don't know which stream/entity it's under. This is
+    distinct from `find_entities` (which matches names). Returns live results only, capped
+    with a `*_truncated` flag; it never follows an asset pointer.
+
+    Args:
+        query: Words to match (OR-ed; relevance floats full matches to the top).
+    """
+    return content_service().search(query)
+
+
+@mcp.tool()
 def get_stream(stream: str) -> dict:
     """Fetch a stream's thin view: its identity, purpose, and notes (oldest first).
 

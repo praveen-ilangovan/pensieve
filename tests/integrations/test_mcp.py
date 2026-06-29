@@ -72,6 +72,7 @@ EXPECTED_TOOLS = {
     "add_asset",
     "list_assets",
     "remove_asset",
+    "search",
 }
 
 
@@ -227,6 +228,23 @@ def test_mcp_asset_add_list_remove(integration_store: Path):
     assert added.isError is False
     assert "asset-1" in listed and "read CLAUDE.md first" in listed
     assert "asset-1" not in after  # removed
+
+
+async def _search(store: Path) -> str:
+    async with _client(store) as session:
+        await session.call_tool("create_stream", {"name": "Recs"})
+        await session.call_tool(
+            "add_note", {"stream": "recs", "text": "we priced the deck at five dollars"}
+        )
+        await session.call_tool("add_asset", {"target": "recs", "location": "~/code/recs"})
+        # 'pricing' must recall 'priced' (porter stemming); asset hint/loc also searchable
+        notes = await session.call_tool("search", {"query": "pricing"})
+        return str(notes)
+
+
+def test_mcp_search_stems_and_returns_live(integration_store: Path):
+    out = asyncio.run(_search(integration_store))
+    assert "note-1" in out  # 'pricing' matched 'priced' via porter stemming
 
 
 async def _fetch_missing(store: Path) -> object:

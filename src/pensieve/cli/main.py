@@ -155,6 +155,38 @@ def find(
         typer.echo(f"{kind:<7} {rid:<22} {label}")
 
 
+@app.command()
+def search(
+    query: str = typer.Argument(
+        ..., help="Words to search note content + asset pointers."
+    ),
+) -> None:
+    """Search the memory's **content** — note prose (stemmed, ranked) + asset pointers
+    (hint/label/location). For "what did we decide about X"; `find` matches names instead.
+    """
+    res = content_service().search(query)
+    if not res["notes"] and not res["assets"]:
+        typer.echo(f"No matches for '{query}'.")
+        return
+    if res["notes"]:
+        typer.echo("Notes:")
+        for n in res["notes"]:
+            homes = ", ".join(h["id"] for h in n["streams"]) or "—"
+            typer.echo(f"  {n['id']}  {n['snippet']}  [{homes}]")
+        if res["notes_truncated"]:
+            typer.echo("  … more note matches (showing top results)")
+    if res["assets"]:
+        typer.echo("Assets:")
+        for a in res["assets"]:
+            hint = f" — {a['hint']}" if a["hint"] else ""
+            miss = "  ⚠ missing" if a.get("missing") else ""
+            typer.echo(
+                f"  {a['id']}  [{a['kind']}] {a['location']}{hint}  (on {a['owner']}){miss}"
+            )
+        if res["assets_truncated"]:
+            typer.echo("  … more asset matches (showing top results)")
+
+
 # --------------------------------------------------------------------------- #
 # stream
 # --------------------------------------------------------------------------- #

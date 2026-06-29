@@ -167,6 +167,48 @@ def run_checks() -> Checks:
         ["Rafia and Travis are curators"],
     )
 
+    # 9. SEARCH — content recall: FTS over note prose (stemmed) + asset pointers.
+    # genuine stemming: the note says "priced", the query is "pricing" — only FTS5 + porter
+    # links them (a substring/LIKE search never would).
+    content.add_note("writing", "we priced the decks last week", actor="eval")
+    sv = content_service().search("pricing")
+    checks.eq(
+        "search stems note content (pricing → priced)",
+        any("priced" in n["text"] for n in sv["notes"]),
+        True,
+    )
+    checks.eq(
+        "search hit carries its stream home",
+        any(h["id"] == "writing" for n in sv["notes"] for h in n["streams"]),
+        True,
+    )
+    # liveness: a removed note drops out of search
+    ephemeral = content.add_note("writing", "ephemeral teardown idea", actor="eval")
+    content.delete_note(ephemeral.id)
+    checks.eq(
+        "search excludes a removed note",
+        content_service().search("ephemeral")["notes"],
+        [],
+    )
+    from pensieve.factory import asset_service
+
+    asset_service().add_asset(
+        "recs", "/Users/me/code/recs", hint="read CLAUDE.md first", actor="eval"
+    )
+    av = content_service().search(
+        "CLAUDE"
+    )  # matches the asset's hint, never its contents
+    checks.eq(
+        "search finds an asset by its hint",
+        [a["location"] for a in av["assets"]],
+        ["/Users/me/code/recs"],
+    )
+    checks.eq(
+        "search returns nothing for an unknown term",
+        content_service().search("zzzznope")["notes"],
+        [],
+    )
+
     # (Removal — note/stream/entity rm + restore, and the bottom-up cascade — is its own
     #  deterministic suite: evals/removal.py.)
 

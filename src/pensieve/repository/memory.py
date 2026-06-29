@@ -29,6 +29,11 @@ def _clone(obj: _M) -> _M:
     return type(obj)(**obj.model_dump())
 
 
+def _asset_haystack(asset: Asset) -> str:
+    """The searchable text of an asset — its metadata, never its contents (read-on-demand)."""
+    return " ".join(x for x in (asset.hint, asset.label, asset.location) if x).lower()
+
+
 @dataclass
 class MemoryState:
     """The committed store, shared across `UnitOfWork` instances (the 'database')."""
@@ -155,6 +160,52 @@ class InMemoryRepository:
             if i in self._state.notes and self._state.notes[i].deleted_at is None
         ]
         return [_clone(n) for n in sorted(notes, key=lambda n: n.created)]
+
+    def nodes_for_note(self, note_id: str) -> list[Node]:
+        ids = [nid for (n, nid) in self._state.attachments if n == note_id]
+        nodes = [
+            self._state.nodes[i]
+            for i in ids
+            if i in self._state.nodes and self._state.nodes[i].deleted_at is None
+        ]
+        return [_clone(n) for n in sorted(nodes, key=lambda n: n.label)]
+
+    # search ---------------------------------------------------------------
+    def search_notes(self, terms: list[str], limit: int) -> list[Note]:
+        # substring double (any term); FTS semantics live only in the SQLite adapter.
+        if not terms:
+            return []
+        matched = [
+            n
+            for n in self._state.notes.values()
+            if self._note_live(n.id) and any(t in n.text.lower() for t in terms)
+        ]
+        matched.sort(key=lambda n: n.created, reverse=True)
+        return [_clone(n) for n in matched[:limit]]
+
+    def search_assets(self, terms: list[str], limit: int) -> list[Asset]:
+        if not terms:
+            return []
+        matched = [
+            a
+            for a in self._state.assets.values()
+            if any(t in _asset_haystack(a) for t in terms)
+        ]
+        matched.sort(key=lambda a: a.created, reverse=True)
+        out: list[Asset] = []
+        for a in matched:
+            if self._asset_owner_live(a):
+                out.append(_clone(a))
+                if len(out) >= limit:
+                    break
+        return out
+
+    def _asset_owner_live(self, asset: Asset) -> bool:
+        if asset.node_id is not None:
+            return self._node_visible(asset.node_id)
+        if asset.note_id is not None:
+            return self._note_live(asset.note_id)
+        return False
 
     # attachments ----------------------------------------------------------
     def attach(self, note_id: str, node_id: str) -> None:

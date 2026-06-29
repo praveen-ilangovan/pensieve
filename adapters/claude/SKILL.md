@@ -89,6 +89,11 @@ thread, so next time "what about Rafia?" is instant. Never auto-promote; it's a 
   if long. Vague? `list_streams` and ask which.
 - **"what do I know about <someone/something>"** → `find_entities` to locate it, then
   `get_entity` for its notes (works whether or not it's a thread yet).
+- **"what did we decide about <topic>"** → `search(query)` — full-text over note **content**
+  (stemmed, ranked) **and** asset pointers (hint/label/location). Reach for this when the
+  topic isn't a stream/entity name. `find`/`find_entities` match *names*; `search` matches
+  *content*. Results are live-only and capped (a `*_truncated` flag tells you if there's
+  more) — and an asset hit is still just a pointer: follow it on demand, per ASSETS.
 
 ## ASSETS — "here's the repo / file / link for X"
 An **asset** is a *pointer to live context* (a repo path, file, dir, URL, image, doc) — the

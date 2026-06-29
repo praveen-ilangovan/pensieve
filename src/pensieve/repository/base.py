@@ -70,6 +70,20 @@ class Repository(Protocol):
         """The notes attached to a node, in chronological order."""
         ...
 
+    def nodes_for_note(self, note_id: str) -> list[Node]:
+        """The **visible** nodes a note is attached to (its live homes), by label."""
+        ...
+
+    # search (content recall) — terms are OR-ed; results are live-only, capped at `limit`
+    def search_notes(self, terms: list[str], limit: int) -> list[Note]:
+        """Live notes matching any term, best-first (engine-defined relevance). NOT held to
+        cross-adapter equality — SQLite uses FTS5/bm25, the in-memory double uses substring."""
+        ...
+
+    def search_assets(self, terms: list[str], limit: int) -> list[Asset]:
+        """Live-owner assets whose hint/label/location contains any term, newest-first."""
+        ...
+
     # attachments (note <-> node, many-to-many)
     def attach(self, note_id: str, node_id: str) -> None: ...
     def detach(self, note_id: str, node_id: str) -> None: ...
