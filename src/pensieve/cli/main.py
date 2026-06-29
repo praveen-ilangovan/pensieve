@@ -296,20 +296,67 @@ def stream_restore(
 @note_app.command("add")
 def note_add(
     text: str = typer.Argument(..., help="The note text (quote it)."),
-    stream: str = typer.Option(
-        ..., "--stream", "-s", help="Id of the stream (top-level) to add to."
+    stream: list[str] = typer.Option(
+        ...,
+        "--stream",
+        "-s",
+        help="Stream(s) to file the note in (repeat -s for several).",
     ),
 ) -> None:
-    """Add a note to a stream. (Notes reach a thread by tagging its entity, not directly.)"""
+    """Add a note to one or more streams. (Notes reach a thread by tagging its entity.)
+
+    Example: pensieve note add "the AI-agents article" -s writing -s recs
+    """
     try:
-        note = content_service().add_note(stream, text, actor="cli", interface="cli")
+        note = content_service().add_note(
+            stream[0], text, also=stream[1:], actor="cli", interface="cli"
+        )
     except NodeNotFound as exc:
-        typer.echo(f"✗ No stream '{stream}'", err=True)
+        typer.echo(f"✗ {exc}".replace("node", "stream"), err=True)
         raise typer.Exit(code=1) from exc
     except PensieveError as exc:  # e.g. target is a thread, not a stream
         typer.echo(f"✗ {exc}", err=True)
         raise typer.Exit(code=1) from exc
-    typer.echo(f"✓ added {note.id} to '{stream}'")
+    typer.echo(f"✓ added {note.id} to {', '.join(stream)}")
+
+
+@note_app.command("file")
+def note_file(
+    note: str = typer.Argument(..., help="Note id (e.g. note-3)."),
+    stream: str = typer.Option(
+        ..., "--stream", "-s", help="Stream to also file it in."
+    ),
+) -> None:
+    """File an existing note into another stream (one note, several homes)."""
+    try:
+        content_service().file_note(note, stream)
+    except NoteNotFound as exc:
+        typer.echo(f"✗ No note '{note}'", err=True)
+        raise typer.Exit(code=1) from exc
+    except NodeNotFound as exc:
+        typer.echo(f"✗ No stream '{stream}'", err=True)
+        raise typer.Exit(code=1) from exc
+    except PensieveError as exc:  # target is a thread
+        typer.echo(f"✗ {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"✓ filed {note} in '{stream}'")
+
+
+@note_app.command("unfile")
+def note_unfile(
+    note: str = typer.Argument(..., help="Note id (e.g. note-3)."),
+    stream: str = typer.Option(..., "--stream", "-s", help="Stream to remove it from."),
+) -> None:
+    """Remove a note from a stream (it stays in its other streams; can't remove its last)."""
+    try:
+        content_service().unfile_note(note, stream)
+    except NoteNotFound as exc:
+        typer.echo(f"✗ No note '{note}'", err=True)
+        raise typer.Exit(code=1) from exc
+    except PensieveError as exc:  # not filed there / only home
+        typer.echo(f"✗ {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"✓ unfiled {note} from '{stream}'")
 
 
 @note_app.command("edit")

@@ -69,7 +69,11 @@ edit the store directly.
      untagged so it stays in the stream). When unsure, don't tag — or ask.
 5. **Tidy** the text so it stands alone; **pin relative dates to absolute** ("Tuesday" →
    the actual date).
-6. On approval → `add_note(stream, text, entities=[…])`.
+6. On approval → `add_note(stream, text, entities=[…])`. **If the note genuinely spans more
+   than one stream** (e.g. "the AI-agents article" is about *Writing* and *Recs*), file it in
+   all of them with `also=[…]` — **one note, several homes; never duplicate it**. (Already
+   captured and only later realise it spans? `file_note(note, stream)`.) Most notes belong to
+   exactly one stream — multi-home only when it truly does.
 7. **Promotion check** (below). Then **confirm briefly** — what landed where.
 
 > A change in the world is a **new note**, not an edit. Use `edit_note` only to fix a

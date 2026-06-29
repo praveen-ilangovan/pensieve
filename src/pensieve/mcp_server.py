@@ -15,7 +15,13 @@ from __future__ import annotations
 
 from mcp.server.fastmcp import Context, FastMCP
 
-from .errors import AssetNotFound, EntityNotFound, NodeNotFound, NoteNotFound
+from .errors import (
+    AssetNotFound,
+    EntityNotFound,
+    NodeNotFound,
+    NoteNotFound,
+    PensieveError,
+)
 from .factory import (
     asset_service,
     content_service,
@@ -142,28 +148,80 @@ def find_entities(query: str) -> list[dict]:
 
 @mcp.tool()
 def add_note(
-    stream: str, text: str, ctx: Context, entities: list[dict] | None = None
+    stream: str,
+    text: str,
+    ctx: Context,
+    entities: list[dict] | None = None,
+    also: list[str] | None = None,
 ) -> dict:
     """Add a note (a piece of information) to a stream, tagging the entities it mentions.
 
     Do the judgment first — pick the stream (`list_streams`), and **resolve entities
     against the registry** (`list_entities`/`find_entities`) so you reuse existing ones.
-    A change in the world is a *new* note; use `update_note` only to fix a mistake.
+    A change in the world is a *new* note; use `edit_note` only to fix a mistake.
+
+    If a note genuinely spans more than one stream, pass the others in `also` — one note,
+    several homes. **Never duplicate** a note across streams. Most notes belong to one.
 
     Args:
-        stream: Id of the target stream (from `list_streams`).
+        stream: Id of the primary stream (from `list_streams`).
         text: The note text.
         entities: The entities this note references. Each item is either
             {"id": "<existing-entity-id>"} (reuse) or
             {"name": str, "kind": "person|org|topic", "aliases": [str]} (create new).
+        also: Additional stream ids this note also belongs in (optional).
     """
     try:
         note = content_service().add_note(
-            stream, text, entities=entities, actor=_client_name(ctx), interface="mcp"
+            stream,
+            text,
+            entities=entities,
+            also=also or [],
+            actor=_client_name(ctx),
+            interface="mcp",
         )
     except NodeNotFound as exc:
+        raise ValueError(str(exc).replace("node", "stream")) from exc
+    streams = [stream, *(also or [])]
+    return {"id": note.id, "streams": streams, "entities": entities or []}
+
+
+@mcp.tool()
+def file_note(note: str, stream: str) -> dict:
+    """File an **existing** note into another stream — one note, several homes (don't
+    duplicate). Use when a note you already captured also belongs in a second stream.
+
+    Args:
+        note: Id of the note (e.g. "note-3").
+        stream: Id of the stream to also file it in.
+    """
+    try:
+        content_service().file_note(note, stream)
+    except NoteNotFound as exc:
+        raise ValueError(f"No note '{note}'") from exc
+    except NodeNotFound as exc:
         raise ValueError(f"No stream '{stream}'") from exc
-    return {"id": note.id, "stream": stream, "entities": entities or []}
+    except PensieveError as exc:  # target is a thread, not a stream
+        raise ValueError(str(exc)) from exc
+    return {"note": note, "filed_in": stream}
+
+
+@mcp.tool()
+def unfile_note(note: str, stream: str) -> dict:
+    """Remove a note from one of its streams (it stays in the others). Refuses to remove a
+    note's last home — use `remove_note` for that.
+
+    Args:
+        note: Id of the note (e.g. "note-3").
+        stream: Id of the stream to remove it from.
+    """
+    try:
+        content_service().unfile_note(note, stream)
+    except NoteNotFound as exc:
+        raise ValueError(f"No note '{note}'") from exc
+    except PensieveError as exc:  # not filed there / its only home
+        raise ValueError(str(exc)) from exc
+    return {"note": note, "unfiled_from": stream}
 
 
 @mcp.tool()

@@ -106,6 +106,7 @@ def _scenario(b: SimpleNamespace) -> list[tuple]:
     b.content.add_note("employment", "Rafia asked about a role", entities=[{"id": "rafia"}])  # note-4
     b.assets.add_asset("recs", "~/code/recs", hint="read CLAUDE.md first")  # node-level
     b.assets.add_asset("note-2", "https://rafia.dev", kind="url")  # note-level
+    b.content.file_note("note-1", "employment")  # multi-home: note-1 now in recs + employment
     snaps.append(_snapshot(b))  # after capture
 
     b.entities.promote_entity("rafia", "recs")

@@ -96,22 +96,19 @@ class ContentService:
         entities: Sequence[EntitySpec] | None = None,
         actor: str | None = None,
         interface: str | None = None,
+        also: Sequence[str] = (),
     ) -> Note:
-        """Record a new piece of information, attach it to a node, and tag the entities
-        it references (resolved/created from ``entities``).
+        """Record a new piece of information, attach it to one **or more** streams, and tag
+        the entities it references. ``also`` lists additional streams a note that genuinely
+        spans more than one domain should live in (one note, several homes — never duplicate).
 
-        Raises ``NodeNotFound`` if the node is missing, ``EntityNotFound`` if an entity
-        referenced by id doesn't exist.
+        Raises ``NodeNotFound`` if a target is missing, ``PensieveError`` if a target is a
+        thread (notes reach a thread by tagging its entity), ``EntityNotFound`` for a bad id.
         """
         with self._uow() as uow:
-            node = uow.repo.get_node(node_id)
-            if node is None:
-                raise NodeNotFound(f"No node '{node_id}'")
-            if node.parent_id is not None:
-                raise PensieveError(
-                    f"'{node_id}' is a thread, not a stream — capture to a stream; "
-                    "notes reach a thread by tagging its entity."
-                )
+            targets = list(dict.fromkeys([node_id, *also]))  # dedupe, preserve order
+            for stream_id in targets:
+                self._require_stream(uow, stream_id)
             note_id = uow.repo.next_id("_note", "note", "note-")
             now = _utcnow()
             note = Note(
@@ -123,11 +120,50 @@ class ContentService:
                 interface=interface,
             )
             uow.repo.add_note(note)
-            uow.repo.attach(note_id, node_id)
+            for stream_id in targets:
+                uow.repo.attach(note_id, stream_id)
             for spec in entities or ():
                 self._tag(uow, note_id, self._resolve_entity(uow, spec, now))
             uow.commit()
             return note
+
+    def file_note(self, note_id: str, stream_id: str) -> None:
+        """File an **existing** note into another stream (one note, several homes). Raises
+        ``NoteNotFound`` / ``NodeNotFound``; ``PensieveError`` if the target is a thread."""
+        with self._uow() as uow:
+            if uow.repo.get_note(note_id) is None:
+                raise NoteNotFound(f"No note '{note_id}'")
+            self._require_stream(uow, stream_id)
+            uow.repo.attach(note_id, stream_id)  # idempotent
+            uow.commit()
+
+    def unfile_note(self, note_id: str, stream_id: str) -> None:
+        """Remove a note from a stream. Refuses to remove its **last** home (use ``rm``).
+        Raises ``NoteNotFound``; ``PensieveError`` if it isn't filed there / is its only home.
+        """
+        with self._uow() as uow:
+            if uow.repo.get_note(note_id) is None:
+                raise NoteNotFound(f"No note '{note_id}'")
+            homes = {h.id for h in uow.repo.nodes_for_note(note_id)}
+            if stream_id not in homes:
+                raise PensieveError(f"Note '{note_id}' isn't filed in '{stream_id}'")
+            if len(homes) <= 1:
+                raise PensieveError(
+                    f"'{stream_id}' is the note's only home — use 'note rm' to remove it"
+                )
+            uow.repo.detach(note_id, stream_id)
+            uow.commit()
+
+    def _require_stream(self, uow: UnitOfWork, stream_id: str) -> None:
+        """A target must be an existing **stream** (top-level), not a thread or missing."""
+        node = uow.repo.get_node(stream_id)
+        if node is None:
+            raise NodeNotFound(f"No node '{stream_id}'")
+        if node.parent_id is not None:
+            raise PensieveError(
+                f"'{stream_id}' is a thread, not a stream — capture to a stream; "
+                "notes reach a thread by tagging its entity."
+            )
 
     def tag_note(self, note_id: str, entities: Sequence[EntitySpec]) -> list[str]:
         """Tag an existing note with entities (resolve/create). Returns the entity ids.

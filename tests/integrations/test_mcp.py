@@ -60,6 +60,8 @@ EXPECTED_TOOLS = {
     "edit_note",
     "remove_note",
     "restore_note",
+    "file_note",
+    "unfile_note",
     "tag_note",
     "untag_note",
     "list_entities",
@@ -259,6 +261,24 @@ async def _recent(store: Path) -> str:
 def test_mcp_recent_newest_first(integration_store: Path):
     out = asyncio.run(_recent(integration_store))
     assert out.index("note-2") < out.index("note-1")  # newest-first
+
+
+async def _multistream(store: Path) -> tuple[str, str]:
+    async with _client(store) as session:
+        await session.call_tool("create_stream", {"name": "Writing"})
+        await session.call_tool("create_stream", {"name": "Recs"})
+        # capture into two streams at once, then file an existing note into a third? (2 here)
+        await session.call_tool(
+            "add_note", {"stream": "writing", "text": "AI-agents article", "also": ["recs"]}
+        )
+        writing = await session.call_tool("get_stream", {"stream": "writing"})
+        recs = await session.call_tool("get_stream", {"stream": "recs"})
+        return str(writing), str(recs)
+
+
+def test_mcp_add_note_multi_stream(integration_store: Path):
+    writing, recs = asyncio.run(_multistream(integration_store))
+    assert "AI-agents article" in writing and "AI-agents article" in recs  # one note, both
 
 
 async def _fetch_missing(store: Path) -> object:

@@ -230,6 +230,22 @@ def run_checks() -> Checks:
         [],
     )
 
+    # 11. MULTI-STREAM — one note filed in several streams shows in each (no duplication).
+    multi = content.add_note(
+        "writing",
+        "the AI-agents article spans writing and recs",
+        also=["recs"],
+        actor="eval",
+    )
+    checks.eq(
+        "a multi-stream note appears in every stream it's filed in",
+        all(
+            multi.id in [n["id"] for n in content_service().get_stream_view(s)["notes"]]
+            for s in ("writing", "recs")
+        ),
+        True,
+    )
+
     # (Removal — note/stream/entity rm + restore, and the bottom-up cascade — is its own
     #  deterministic suite: evals/removal.py.)
 

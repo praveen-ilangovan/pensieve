@@ -242,7 +242,8 @@ class SqliteRepository:
         # won't order this row after the note/node it references — flush them first so
         # the FK targets exist (covers add_note->attach and create-node->attach).
         self._session.flush()
-        self._session.add(Attachment(note_id=note_id, node_id=node_id))
+        if self._session.get(Attachment, (note_id, node_id)) is None:  # idempotent
+            self._session.add(Attachment(note_id=note_id, node_id=node_id))
 
     def detach(self, note_id: str, node_id: str) -> None:
         att = self._session.get(Attachment, (note_id, node_id))
