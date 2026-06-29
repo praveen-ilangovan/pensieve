@@ -48,11 +48,14 @@ session can pull recent deltas cheaply. Feeds a future auto-hydrate on session s
   graph healthy over months.
 - **Consolidation / compaction** — a "sleep" that digests old notes into summaries while
   keeping raw history. Cheap to reserve now.
-- **Auto-hydrate** — wire a compact memory index so session bootstrap is automatic, not
-  prompted (depends on recency + search).
 - **`supersedes` relation** — a note marks an earlier one stale, for cheap current-state
   without deleting history. A refinement of recency; revisit after #4.
 
 ## Explicitly parked (against the principle)
 - **Typed notes (decision / status / commitment).** Tempting for "show open commitments",
   but that's a PM layer. Pensieve stores information; the *agent* infers state at read time.
+- **Auto-hydrate (automatic pull at session start).** ✗ **Won't do** — violates the
+  deliberate principle (see memory `pensieve-deliberate-by-design`). Pensieve is
+  manually-triggered on *both* ends: it never recalls (or saves) on its own. "Catch me up on
+  X" is the agent composing the existing recall lenses **in response to a deliberate
+  request** — not a feature, and never proactive.

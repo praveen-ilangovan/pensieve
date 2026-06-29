@@ -98,11 +98,15 @@ thread, so next time "what about Rafia?" is instant. Never auto-promote; it's a 
   edited notes across the whole memory, newest-first. This is the **time** lens (vs `search`
   = content, `find` = names).
 
-### RESUME / HYDRATE (start of a resumed session)
-To rebuild working context, combine the lenses — **`recent`** (what changed lately) +
-**`search`/`get_stream`** (what's relevant to the task at hand). Pass `since` your last
-session if you know it. Keep it a light, deliberate move — pull the recent/relevant residue,
-don't crawl everything; and follow any asset pointers only on demand.
+### Composite recall — only when explicitly asked
+When the user **deliberately** asks to catch up or resume something ("what's the latest on
+Rafia", "catch me up on Recs"), combine the lenses — **`recent`** (what changed) +
+**`find_entities`/`get_entity`/`search`/`get_stream`** (what's relevant) — into a tight
+briefing, and follow any asset pointers only on demand.
+
+> **Never pull on your own.** Pensieve is deliberate on *both* ends: you don't save without
+> the user asking, and you don't recall without the user asking. Do **not** auto-load the
+> memory at session start — recall happens only in response to a deliberate request.
 
 ## ASSETS — "here's the repo / file / link for X"
 An **asset** is a *pointer to live context* (a repo path, file, dir, URL, image, doc) — the
