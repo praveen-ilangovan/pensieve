@@ -3,12 +3,12 @@
 **A personal, agent-driven memory that survives across sessions.**
 
 You talk to an AI assistant (Claude Code) every day, but it forgets everything between
-sessions. Pensieve is the long-term memory you control: at the end of a session you say
-*"add this to pensieve,"* and next time you say *"what do I know about X?"* and it's there —
-organised, current, and yours.
+sessions. Pensieve is the long-term memory you control: **any time** in a conversation you can
+say *"add this to pensieve"* to capture something, or *"what do I know about X?"* to pull it
+back — and it's there, organised, current, and yours.
 
-> The metaphor: deliberately draw out a strand of thought and deposit it in the vessel for
-> later. (Formerly codenamed "Memory Stick".)
+> The metaphor: deliberately draw out a strand of thought and deposit it in the vessel to
+> revisit later.
 
 It's a small **Python + SQLite** engine with two front doors: an **MCP server** the agent
 uses, and a **CLI** for you. Your memory lives in a single file at `~/.pensieve`.
@@ -40,13 +40,16 @@ Five ideas shape every decision in Pensieve:
    by-reference pointer with a one-line "how to use me" hint. Pensieve stores the pointer and
    reads it *on demand*; it never crawls your disk or follows a link on its own.
 
+> Want the reasoning in depth — the design decisions, the full model, the tradeoffs?
+> **[`docs/philosophy.md`](docs/philosophy.md).**
+
 ---
 
 ## The model
 
 | Thing | What it is |
 |---|---|
-| **stream** | A top-level domain of your work/life — `recs`, `employment`, `writing`. Deliberate and few. |
+| **stream** | A top-level domain of your work/life — `career`, `personal`, `side-projects`. Deliberate and few. |
 | **note** | An atomic piece of information — the unit you capture. Can live in more than one stream. |
 | **entity** | A person / org / topic your notes are *about*. Born from a note (by tagging); never created in a vacuum. |
 | **thread** | An entity that recurred enough to earn its own focused sub-topic under a stream. |
@@ -86,25 +89,26 @@ Pensieve shines through the agent — you speak naturally, it does the judgment 
 tools. Everything below is just *talking to Claude Code*.
 
 **Set up your domains** (do this once, deliberately):
-> "Create a pensieve stream called Recs — for building my recommendations app."
+> "Create a pensieve stream called Career — for my job search and work."
 
-**Capture** — the end-of-session move:
-> "Add this to pensieve: we're talking to 4 curators, Rafia is the furthest along."
+**Capture** — any time something worth keeping comes up:
+> "Add this to pensieve: had a call with Maya about the platform role; she's reviewing my portfolio."
 
 The agent filters for what's *durable*, routes it to the right stream, and recognises that
-"Rafia" is a person worth tracking — without you managing any of that. If a note spans two
-domains (an article that's about *Writing* and *Recs*), it files **one** note in both.
+"Maya" is a person worth tracking — without you managing any of that. If a note spans two
+domains (say, a talk that's relevant to both your `career` and a `side-project`), it files
+**one** note in both.
 
 **Recall** — pick the lens that fits the question:
-> "What do I know about Rafia?" · "What did we decide about pricing?" · "Catch me up — what's
+> "What do I know about Maya?" · "What did we decide about salary?" · "Catch me up — what's
 > changed lately?"
 
 **Point at live context** — so the agent knows where to read:
-> "Add my Recs repo at ~/code/recs as an asset on the Recs stream — hint: read CLAUDE.md
-> first." Later: "pull up the Recs repo." (It follows the pointer only when you ask.)
+> "Add my project repo at ~/projects/acme as an asset on the side-projects stream — hint: read
+> README.md first." Later: "pull up the acme repo." (It follows the pointer only when you ask.)
 
 **Promote** — when something recurs, the agent proposes it:
-> "Rafia's come up across 5 notes — want her own thread under Recs?"
+> "Maya's come up across 5 notes — want her own thread under Career?"
 
 **Remove / restore** — everything is soft and reversible:
 > "Remove that note." / "Actually, bring it back." / "I'm done with the X stream."
@@ -113,22 +117,9 @@ domains (an article that's about *Writing* and *Recs*), it files **one** note in
 
 ## Using it (the CLI)
 
-The CLI is the same engine, for when you want it directly (it's also handy for scripting).
-Full reference: [`docs/cli.md`](docs/cli.md).
-
-```bash
-pensieve stream create Recs -p "Build Recs"   # a domain
-pensieve note add "met Rafia" -s recs         # a note (repeat -s for several streams)
-pensieve show recs                            # a stream's threads + notes + assets
-pensieve search "pricing"                     # full-text recall (stemmed)
-pensieve recent --since 2026-06-01            # what changed
-pensieve find rafia                           # by name
-pensieve asset add recs ~/code/recs --hint "read CLAUDE.md first"
-```
-
-Nouns and their verbs: `stream` (create/list/edit/rm/restore), `note`
-(add/edit/rm/restore/file/unfile), `entity` (link/unlink/list/promote/edit/rm/restore),
-`asset` (add/list/rm), plus top-level `show`, `find`, `search`, `recent`.
+The same engine is a CLI too — handy for a quick check or scripting without the agent
+(`pensieve stream list`, `pensieve search "…"`, …). Full command reference with examples:
+**[`docs/cli.md`](docs/cli.md)**.
 
 ---
 
@@ -158,7 +149,8 @@ The in-repo MCP server and CLI use a local dev store (`.env` → `.local/manual`
 install (`./install.sh`) is what points at `~/.pensieve`.
 
 Design notes live in [`plans/`](plans) (one file per slice, plus
-[`plans/roadmap.md`](plans/roadmap.md)) and [`docs/`](docs) (`cli.md`, `glossary.md`).
+[`plans/roadmap.md`](plans/roadmap.md)) and [`docs/`](docs)
+([`philosophy.md`](docs/philosophy.md) — the why + model, [`cli.md`](docs/cli.md) — commands).
 
 ---
 

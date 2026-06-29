@@ -2,7 +2,7 @@
 models.py
 
 SQLModel table models — the physical realization of the Pensieve model
-(see docs/glossary.md). A generic ``nodes`` table (streams + threads) + ``edges``
+(see docs/philosophy.md). A generic ``nodes`` table (streams + threads) + ``edges``
 (deferred), standalone ``notes`` + a ``notes``↔``nodes`` ``attachments`` table
 (notes are multi-homed), plus id ``counters``. Kind-specific data lives in
 ``Node.properties`` (JSON), so a new node-kind needs no schema change.

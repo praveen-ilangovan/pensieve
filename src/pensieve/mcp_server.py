@@ -8,7 +8,7 @@ MCP server exposing Pensieve's **ops** as tools for agents (Claude Code, etc.):
 These are mechanical ops at parity with the CLI — per noun: create/add, `edit_*`, `get_*`,
 and soft-reversible `remove_*` / `restore_*` (plus `tag_note`/`untag_note`,
 `promote_entity`). The judgment-bearing `capture`/`fetch` *flows* live in the agent's skill,
-which composes these tools (see docs/verbs.md §0a). Run with `pensieve-mcp` (or `make mcp`).
+which composes these tools (see adapters/claude/SKILL.md). Run with `pensieve-mcp` (or `make mcp`).
 """
 
 from __future__ import annotations

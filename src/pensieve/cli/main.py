@@ -3,14 +3,15 @@ cli/main.py
 
 Pensieve CLI — the engine's **op** surface, organised by concept:
 
-    pensieve init | show <id> | find <q> [--type …]
+    pensieve init | show <id> | find <q> [--type …] | search <q> | recent
     pensieve stream  create | list | edit | rm | restore
-    pensieve note    add | edit | rm | restore
+    pensieve note    add | edit | rm | restore | file | unfile
     pensieve entity  link | unlink | list | promote | edit | rm | restore
+    pensieve asset   add | list | rm
 
 ``rm`` is a **soft-delete** (reversible via ``restore``); a future ``forget`` will hard
 -delete. The judgment-bearing flows (capture / fetch) live in the agent skill, not here
-(see docs/verbs.md §0a).
+(see adapters/claude/SKILL.md).
 """
 
 from __future__ import annotations
