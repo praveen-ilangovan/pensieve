@@ -40,12 +40,24 @@ __all__ = [
 EntitySpec = dict[str, Any]
 
 
-# default top-K per search section; truncation is always surfaced, never silent
-_SEARCH_LIMIT = 20
+# default top-K per result page (search / recent); truncation is always surfaced, never silent
+_PAGE_LIMIT = 20
 
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def parse_since(value: str | None) -> datetime | None:
+    """Parse an ISO date/datetime into a naive-UTC datetime (the surface layer calls this and
+    passes the result into ``recent``). Aware inputs are converted to UTC then made naive, to
+    match how timestamps are stored/compared. Raises ``ValueError`` on a bad string."""
+    if not value:
+        return None
+    dt = datetime.fromisoformat(value)
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
 
 
 def _search_terms(query: str) -> list[str]:
@@ -279,7 +291,7 @@ class ContentService:
                 ],
             }
 
-    def search(self, query: str, *, limit: int = _SEARCH_LIMIT) -> dict[str, Any]:
+    def search(self, query: str, *, limit: int = _PAGE_LIMIT) -> dict[str, Any]:
         """Recall over **content**: note prose (stemmed, ranked) + asset pointers
         (hint/label/location). Live results only; the engine never follows a pointer. Each
         section is capped at ``limit`` with a ``*_truncated`` flag — never a silent cap."""
@@ -307,6 +319,31 @@ class ContentService:
                 "notes_truncated": len(raw_notes) > limit,
                 "assets_truncated": len(raw_assets) > limit,
             }
+
+    def recent(
+        self, *, since: datetime | None = None, limit: int = _PAGE_LIMIT
+    ) -> dict[str, Any]:
+        """The **time axis** of recall: live notes across all streams, newest-first by
+        ``updated`` (so new *and* edited notes surface), optionally only those at/after
+        ``since``. Capped at ``limit`` with a ``truncated`` flag. The other half of hydrate
+        (recency) alongside ``search`` (relevance)."""
+        with self._uow() as uow:
+            raw = uow.repo.recent_notes(since, limit + 1)  # +1 to detect truncation
+            return {
+                "notes": [self._recent_note_view(uow, n) for n in raw[:limit]],
+                "truncated": len(raw) > limit,
+            }
+
+    def _recent_note_view(self, uow: UnitOfWork, note: Note) -> dict[str, Any]:
+        homes = uow.repo.nodes_for_note(note.id)
+        return {
+            "id": note.id,
+            "text": note.text,
+            "date": note.created.isoformat(),
+            "updated": note.updated.isoformat(),
+            "streams": [{"id": h.id, "label": h.label} for h in homes],
+            "entities": uow.repo.tags_for_note(note.id),
+        }
 
     def _search_note_view(
         self, uow: UnitOfWork, note: Note, terms: list[str]

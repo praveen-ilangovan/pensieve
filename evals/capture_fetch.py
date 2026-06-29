@@ -209,6 +209,27 @@ def run_checks() -> Checks:
         [],
     )
 
+    # 10. RECENCY — the time axis: newest-first feed of what changed.
+    from datetime import datetime
+
+    fresh = content.add_note("employment", "just now: signed the offer", actor="eval")
+    checks.eq(
+        "recent surfaces the newest note first",
+        content_service().recent()["notes"][0]["id"],
+        fresh.id,
+    )
+    content.update_note("note-1", "note-1, edited just now", actor="eval")
+    checks.eq(
+        "recent re-floats an edited note",
+        content_service().recent()["notes"][0]["id"],
+        "note-1",
+    )
+    checks.eq(
+        "recent(since=far future) returns nothing",
+        content_service().recent(since=datetime(2999, 1, 1))["notes"],
+        [],
+    )
+
     # (Removal — note/stream/entity rm + restore, and the bottom-up cascade — is its own
     #  deterministic suite: evals/removal.py.)
 

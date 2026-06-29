@@ -353,6 +353,29 @@ def search(query: str) -> dict:
 
 
 @mcp.tool()
+def recent(since: str | None = None, limit: int = 20) -> dict:
+    """The **time axis** of recall — the most recently added/edited notes across the whole
+    memory, newest-first, each with its stream context. Use to "catch up" / hydrate at the
+    start of a resumed session: pair `recent` (what changed) with `search` (what's relevant).
+    Distinct from `search` (relevance) and `find_entities` (names). Live notes only, capped
+    with a `truncated` flag.
+
+    Args:
+        since: Optional ISO date/datetime — only notes updated at/after it (e.g. "2026-06-01").
+        limit: Max notes to return (default 20).
+    """
+    from .services.content import parse_since
+
+    try:
+        cutoff = parse_since(since)
+    except ValueError as exc:
+        raise ValueError(
+            f"Bad 'since' value '{since}' — use ISO, e.g. 2026-06-01"
+        ) from exc
+    return content_service().recent(since=cutoff, limit=limit)
+
+
+@mcp.tool()
 def get_stream(stream: str) -> dict:
     """Fetch a stream's thin view: its identity, purpose, and notes (oldest first).
 

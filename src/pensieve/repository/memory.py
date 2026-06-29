@@ -15,6 +15,7 @@ applies it to the shared store only on `commit()`. Reads return **clones** (via
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from types import TracebackType
 from typing import TypeVar
 
@@ -32,6 +33,11 @@ def _clone(obj: _M) -> _M:
 def _asset_haystack(asset: Asset) -> str:
     """The searchable text of an asset — its metadata, never its contents (read-on-demand)."""
     return " ".join(x for x in (asset.hint, asset.label, asset.location) if x).lower()
+
+
+def _as_naive(dt: datetime) -> datetime:
+    """Drop tzinfo for comparison — stored timestamps are UTC; ``since`` arrives naive-UTC."""
+    return dt.replace(tzinfo=None) if dt.tzinfo is not None else dt
 
 
 @dataclass
@@ -169,6 +175,13 @@ class InMemoryRepository:
             if i in self._state.nodes and self._state.nodes[i].deleted_at is None
         ]
         return [_clone(n) for n in sorted(nodes, key=lambda n: n.label)]
+
+    def recent_notes(self, since: datetime | None, limit: int) -> list[Note]:
+        notes = [n for n in self._state.notes.values() if self._note_live(n.id)]
+        if since is not None:
+            notes = [n for n in notes if _as_naive(n.updated) >= since]
+        notes.sort(key=lambda n: (n.updated, n.created, n.id), reverse=True)
+        return [_clone(n) for n in notes[:limit]]
 
     # search ---------------------------------------------------------------
     def search_notes(self, terms: list[str], limit: int) -> list[Note]:

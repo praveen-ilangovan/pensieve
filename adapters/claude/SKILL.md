@@ -94,6 +94,15 @@ thread, so next time "what about Rafia?" is instant. Never auto-promote; it's a 
   topic isn't a stream/entity name. `find`/`find_entities` match *names*; `search` matches
   *content*. Results are live-only and capped (a `*_truncated` flag tells you if there's
   more) — and an asset hit is still just a pointer: follow it on demand, per ASSETS.
+- **"what changed / catch me up"** → `recent(since?, limit?)` — the most recently added or
+  edited notes across the whole memory, newest-first. This is the **time** lens (vs `search`
+  = content, `find` = names).
+
+### RESUME / HYDRATE (start of a resumed session)
+To rebuild working context, combine the lenses — **`recent`** (what changed lately) +
+**`search`/`get_stream`** (what's relevant to the task at hand). Pass `since` your last
+session if you know it. Keep it a light, deliberate move — pull the recent/relevant residue,
+don't crawl everything; and follow any asset pointers only on demand.
 
 ## ASSETS — "here's the repo / file / link for X"
 An **asset** is a *pointer to live context* (a repo path, file, dir, URL, image, doc) — the

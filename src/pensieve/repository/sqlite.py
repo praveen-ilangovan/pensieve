@@ -9,6 +9,7 @@ after the transaction closes (services never re-touch the session).
 
 from __future__ import annotations
 
+from datetime import datetime
 from types import TracebackType
 
 from sqlalchemy import String, cast, func, or_, text
@@ -143,6 +144,31 @@ class SqliteRepository:
             .order_by(col(Node.label))
         )
         return list(self._session.exec(statement))
+
+    def recent_notes(self, since: datetime | None, limit: int) -> list[Note]:
+        statement = (
+            select(Note)
+            .join(Attachment, col(Attachment.note_id) == col(Note.id))
+            .join(Node, col(Node.id) == col(Attachment.node_id))
+            .where(col(Note.deleted_at).is_(None))
+            .where(col(Node.deleted_at).is_(None))
+        )
+        if since is not None:
+            statement = statement.where(col(Note.updated) >= since)
+        statement = statement.order_by(
+            col(Note.updated).desc(), col(Note.created).desc(), col(Note.id).desc()
+        )
+        # a multi-homed note joins once per visible home → dedupe, preserving rank order
+        seen: set[str] = set()
+        out: list[Note] = []
+        for note in self._session.exec(statement):
+            if note.id in seen:
+                continue
+            seen.add(note.id)
+            out.append(note)
+            if len(out) >= limit:
+                break
+        return out
 
     # search ---------------------------------------------------------------
     def search_notes(self, terms: list[str], limit: int) -> list[Note]:

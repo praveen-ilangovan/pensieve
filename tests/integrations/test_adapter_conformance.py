@@ -85,6 +85,8 @@ def _snapshot(b: SimpleNamespace) -> tuple:
             # (search_notes is intentionally NOT here: SQLite uses FTS5/bm25, the in-memory
             #  double uses substring/recency — engine-specific by design, tested separately.)
             sorted(a.id for a in uow.repo.search_assets(["rafia", "recs"], 10)),
+            # recent_notes is deterministic (time-ordered) → ORDER must match across adapters
+            [n.id for n in uow.repo.recent_notes(None, 50)],
         )
     return (streams, entities, views, recall, ports)
 

@@ -73,6 +73,7 @@ EXPECTED_TOOLS = {
     "list_assets",
     "remove_asset",
     "search",
+    "recent",
 }
 
 
@@ -245,6 +246,19 @@ async def _search(store: Path) -> str:
 def test_mcp_search_stems_and_returns_live(integration_store: Path):
     out = asyncio.run(_search(integration_store))
     assert "note-1" in out  # 'pricing' matched 'priced' via porter stemming
+
+
+async def _recent(store: Path) -> str:
+    async with _client(store) as session:
+        await session.call_tool("create_stream", {"name": "Recs"})
+        await session.call_tool("add_note", {"stream": "recs", "text": "first"})
+        await session.call_tool("add_note", {"stream": "recs", "text": "second"})
+        return str(await session.call_tool("recent", {}))
+
+
+def test_mcp_recent_newest_first(integration_store: Path):
+    out = asyncio.run(_recent(integration_store))
+    assert out.index("note-2") < out.index("note-1")  # newest-first
 
 
 async def _fetch_missing(store: Path) -> object:

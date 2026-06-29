@@ -21,6 +21,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
+    from datetime import datetime
     from types import TracebackType
 
     from ..database.models import Asset, Entity, Node, Note
@@ -72,6 +73,12 @@ class Repository(Protocol):
 
     def nodes_for_note(self, note_id: str) -> list[Node]:
         """The **visible** nodes a note is attached to (its live homes), by label."""
+        ...
+
+    def recent_notes(self, since: datetime | None, limit: int) -> list[Note]:
+        """Live notes, **newest-first by ``updated``** (the time axis of recall), optionally
+        only those updated at/after ``since`` (a datetime or None), capped at ``limit``.
+        Deterministic — both adapters must agree."""
         ...
 
     # search (content recall) — terms are OR-ed; results are live-only, capped at `limit`

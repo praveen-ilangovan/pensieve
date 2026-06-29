@@ -187,6 +187,32 @@ def search(
             typer.echo("  … more asset matches (showing top results)")
 
 
+@app.command()
+def recent(
+    since: str | None = typer.Option(
+        None, "--since", help="Only notes updated at/after this ISO date/datetime."
+    ),
+    limit: int = typer.Option(20, "--limit", "-n", help="Max notes to show."),
+) -> None:
+    """Most recently added/edited notes across all streams (newest first) — "what changed"."""
+    from ..services.content import parse_since
+
+    try:
+        cutoff = parse_since(since)
+    except ValueError as exc:
+        typer.echo(f"✗ Bad --since '{since}' (use ISO, e.g. 2026-06-01)", err=True)
+        raise typer.Exit(code=1) from exc
+    res = content_service().recent(since=cutoff, limit=limit)
+    if not res["notes"]:
+        typer.echo("No recent notes.")
+        return
+    for n in res["notes"]:
+        homes = ", ".join(h["id"] for h in n["streams"]) or "—"
+        typer.echo(f"{n['id']}  {n['updated'][:10]}  {n['text']}  [{homes}]")
+    if res["truncated"]:
+        typer.echo("… more (showing the most recent)")
+
+
 # --------------------------------------------------------------------------- #
 # stream
 # --------------------------------------------------------------------------- #
