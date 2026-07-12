@@ -5,6 +5,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/pensieve-mcp)](https://pypi.org/project/pensieve-mcp/)
 [![Python versions](https://img.shields.io/pypi/pyversions/pensieve-mcp)](https://pypi.org/project/pensieve-mcp/)
 [![License: MIT](https://img.shields.io/github/license/praveen-ilangovan/pensieve)](LICENSE)
+[![MCP Registry](https://img.shields.io/badge/MCP_Registry-listed-1f6feb)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.praveen-ilangovan/pensieve)
 
 **A personal, agent-driven memory that survives across sessions.**
 
@@ -88,6 +89,10 @@ claude mcp add --scope user pensieve -- pensieve-mcp
 
 For any other MCP client, register the `pensieve-mcp` command as a stdio server. To run it
 ad-hoc without installing, `uvx pensieve-mcp` works too.
+
+Pensieve is listed in the official [MCP Registry](https://registry.modelcontextprotocol.io)
+as `io.github.praveen-ilangovan/pensieve`, so registry-aware clients can discover and install
+it directly.
 
 > **Note:** the PyPI package is the engine (CLI + MCP server). The judgment-bearing Claude
 > **skill** (the `capture`/`fetch` flows) ships with the repo, not the wheel — if you want it,
