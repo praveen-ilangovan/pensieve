@@ -6,6 +6,7 @@
 [![Python versions](https://img.shields.io/pypi/pyversions/pensieve-mcp)](https://pypi.org/project/pensieve-mcp/)
 [![License: MIT](https://img.shields.io/github/license/praveen-ilangovan/pensieve)](LICENSE)
 [![MCP Registry](https://img.shields.io/badge/MCP_Registry-listed-1f6feb)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.praveen-ilangovan/pensieve)
+[![Glama score](https://glama.ai/mcp/servers/praveen-ilangovan/pensieve/badges/score.svg)](https://glama.ai/mcp/servers/praveen-ilangovan/pensieve)
 
 **A personal, agent-driven memory that survives across sessions.**
 
