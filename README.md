@@ -4,7 +4,7 @@
 
 [![PyPI version](https://img.shields.io/pypi/v/pensieve-mcp)](https://pypi.org/project/pensieve-mcp/)
 [![Python versions](https://img.shields.io/pypi/pyversions/pensieve-mcp)](https://pypi.org/project/pensieve-mcp/)
-[![License: MIT](https://img.shields.io/pypi/l/pensieve-mcp)](LICENSE)
+[![License: MIT](https://img.shields.io/github/license/praveen-ilangovan/pensieve)](LICENSE)
 
 **A personal, agent-driven memory that survives across sessions.**
 
