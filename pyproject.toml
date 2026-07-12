@@ -1,5 +1,5 @@
 [project]
-name = "pensieve"
+name = "pensieve-mcp"
 version = "0.1.0"
 description = "Manually-triggered, multi-stream agent memory — a personal knowledge graph."
 authors = [{name = "Praveen Ilangovan", email = "praveen.ilangovan@gmail.com"}]

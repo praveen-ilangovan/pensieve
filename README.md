@@ -1,5 +1,7 @@
 # Pensieve
 
+<!-- mcp-name: io.github.praveen-ilangovan/pensieve -->
+
 **A personal, agent-driven memory that survives across sessions.**
 
 You talk to an AI assistant (Claude Code) every day, but it forgets everything between
