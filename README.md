@@ -66,6 +66,31 @@ stemmed, ranked), and by **time** (`recent` — what changed lately).
 
 Assumes Python 3.12+.
 
+### Recommended: from PyPI
+
+Pensieve is a standard MCP server, so the quickest way in is [`pipx`](https://pipx.pypa.io)
+(or [`uv`](https://docs.astral.sh/uv/)):
+
+```bash
+pipx install pensieve-mcp     # or: uv tool install pensieve-mcp
+```
+
+This puts `pensieve` (the CLI) and `pensieve-mcp` (the MCP server) on your PATH. Then point
+your agent at it. For **Claude Code**:
+
+```bash
+claude mcp add --scope user pensieve -- pensieve-mcp
+```
+
+For any other MCP client, register the `pensieve-mcp` command as a stdio server. To run it
+ad-hoc without installing, `uvx pensieve-mcp` works too.
+
+> **Note:** the PyPI package is the engine (CLI + MCP server). The judgment-bearing Claude
+> **skill** (the `capture`/`fetch` flows) ships with the repo, not the wheel — if you want it,
+> use the script install below, which drops it into `~/.claude/skills/pensieve/` for you.
+
+### Alternate: full Claude Code setup from source
+
 ```bash
 git clone git@github.com:praveen-ilangovan/pensieve.git
 cd pensieve
