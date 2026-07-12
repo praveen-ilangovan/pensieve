@@ -2,6 +2,10 @@
 
 <!-- mcp-name: io.github.praveen-ilangovan/pensieve -->
 
+[![PyPI version](https://img.shields.io/pypi/v/pensieve-mcp)](https://pypi.org/project/pensieve-mcp/)
+[![Python versions](https://img.shields.io/pypi/pyversions/pensieve-mcp)](https://pypi.org/project/pensieve-mcp/)
+[![License: MIT](https://img.shields.io/pypi/l/pensieve-mcp)](LICENSE)
+
 **A personal, agent-driven memory that survives across sessions.**
 
 You talk to an AI assistant (Claude Code) every day, but it forgets everything between
